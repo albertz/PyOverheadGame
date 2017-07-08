@@ -53,6 +53,26 @@ class MainWindow(arcade.Window):
         """
         app.game.update(delta_time=delta_time)
 
+    def on_key_press(self, key, modifiers):
+        """Called whenever a key is pressed. """
+
+        if key == arcade.key.UP:
+            app.game.on_key_arrow((0, -1))
+        elif key == arcade.key.DOWN:
+            app.game.on_key_arrow((0, 1))
+        elif key == arcade.key.LEFT:
+            app.game.on_key_arrow((-1, 0))
+        elif key == arcade.key.RIGHT:
+            app.game.on_key_arrow((1, 0))
+
+    def on_key_release(self, key, modifiers):
+        """Called when the user releases a key. """
+
+        if key == arcade.key.UP or key == arcade.key.DOWN:
+            pass
+        elif key == arcade.key.LEFT or key == arcade.key.RIGHT:
+            pass
+
 
 def main():
     """ Main method """
