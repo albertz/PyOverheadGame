@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
 try:
+    # noinspection PyUnresolvedReferences
     import arcade
+    # noinspection PyUnresolvedReferences
     import better_exchook
 except ImportError:
     print("See requirements.txt or README.md about what you need to install.")
