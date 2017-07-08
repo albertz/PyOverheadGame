@@ -10,10 +10,10 @@ from .data import DATA_DIR, GFX_DIR
 GAME_DATA_DIR = DATA_DIR + "/game"
 
 PICTURE_SIZE = 30
-BACKGROUND_PIC = 'hinter.png'
+BACKGROUND_PIC = 'hinter'
 PLAYER_PIC = "figur"
-PLAYER_PICS = ('figur.png', 'robot*.png', 'konig.png')
-ERROR_PIC = 'error.png'  # used for error-displaying
+PLAYER_PICS = ('figur', 'robot*', 'konig')
+ERROR_PIC = 'error'  # used for error-displaying
 
 # room count
 WORLD_WIDTH = 5
@@ -53,6 +53,8 @@ class Game:
         player_place = self.cur_room.find_player_place()
         new_coord = player_place.coord + relative
         if not Room.valid_coord(new_coord):
+            return
+        if self.cur_room.get_place(new_coord).entity.name != BACKGROUND_PIC:
             return
         self.cur_room.reset_place(player_place.coord)
         self.cur_room.set_place_entity_by_name(new_coord, PLAYER_PIC)
@@ -124,6 +126,12 @@ class Room:
         for place in self.places:
             if place.entity.name == PLAYER_PIC:
                 return place
+
+    def get_place(self, coord):
+        """
+        :param (int,int)|numpy.ndarray coord:
+        """
+        return self.places[self.coord_to_idx(coord)]
 
     def reset_place(self, coord):
         """
