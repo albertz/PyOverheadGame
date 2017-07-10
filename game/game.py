@@ -306,6 +306,7 @@ class Entity:
         self.cur_world_coord = world_coord
         self.cur_room_coord = room_coord
         self.name = name
+        self.door_keys = set()  # type: Set[int]
         self.sprite = None  # type: arcade.Sprite
         self.reset_sprite()
 
@@ -345,9 +346,36 @@ class Entity:
         if not Room.valid_coord(new_coord):
             return
         cur_room = self.cur_room
-        if not cur_room.get_place(new_coord).is_free():
+        if not is_allowed_together(cur_room.get_place(new_coord).entities + [self]):
             return
         self.cur_place.remove_entity(self)
         self.cur_room.get_place(new_coord).add_entity(self)
         self.cur_room_coord = new_coord
         self.update_sprite_pos()
+
+
+def is_allowed_together(entities):
+    """
+    :param list[Entity] entities:
+    :rtype: bool
+    """
+    if len(entities) <= 1:
+        return True
+    entity_names_map = {entity.name: entity for entity in entities}
+    if any(["wand%i" % i in entity_names_map for i in range(1, 3)]):
+        return False
+    if any(["code%i" % i in entity_names_map for i in range(1, 4)]):
+        return False
+    doors = [i for i in range(1, 10) if "tuer%i" % i in entity_names_map]
+    if doors:
+        if len(doors) > 1:
+            return False
+        door_idx = doors[0]
+        door = "tuer%i" % door_idx
+        for entity in entities:
+            if entity.name == door:
+                continue
+            if door_idx not in entity.door_keys:
+                return False
+        return True
+    return True
