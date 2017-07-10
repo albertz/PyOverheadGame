@@ -139,8 +139,7 @@ class World:
                 entity = None
             if name in PLAYER_PICS:
                 self.rooms[cur_room_idx].players.append(entity)
-            with self.rooms[cur_room_idx].update_place(cur_place_idx) as place:
-                place.set_entity(entity)
+            self.rooms[cur_room_idx].places[cur_place_idx].set_entity(entity)
             cur_place_idx += 1
             if cur_place_idx == ROOM_WIDTH * ROOM_HEIGHT:
                 cur_room_idx = None
@@ -159,7 +158,7 @@ class Room:
         self.idx = idx
         self.places = [Place(room=self, idx=i) for i in range(ROOM_WIDTH * ROOM_HEIGHT)]
         self.players = []  # type: List[Entity]
-        self._entities_sprite_list = arcade.SpriteList()
+        self.entities_sprite_list = arcade.SpriteList()
 
     @staticmethod
     def valid_coord(coord):
@@ -201,25 +200,18 @@ class Room:
         """
         :param (int,int)|numpy.ndarray coord:
         """
-        with self.update_place(self.coord_to_idx(coord)) as place:
-            place.reset_entities()
-
-    @contextlib.contextmanager
-    def update_place(self, idx):
-        place = self.places[idx]
-        if place.sprite and place.sprite in self._entities_sprite_list:
-            self._entities_sprite_list.remove(place.sprite)
-        yield place
-        if place.sprite:
-            self._entities_sprite_list.append(place.sprite)
+        self.places[self.coord_to_idx(coord)].reset_entities()
 
     def draw(self):
-        self._entities_sprite_list.draw()
+        self.entities_sprite_list.draw()
 
     def on_screen_resize(self):
+        del self.entities_sprite_list[:]
         for place in self.places:
-            with self.update_place(place.idx):
-                place.on_screen_resize()
+            for entity in place.entities:
+                entity.reset_sprite()
+            if place.entities:
+                self.entities_sprite_list.append(place.entities[-1].sprite)
 
 
 class Place:
@@ -231,8 +223,6 @@ class Place:
         self.room = room
         self.idx = idx
         self.entities = []  # type: List[Entity]
-        self.sprite = None  # type: arcade.Sprite
-        self._reset_sprite()
 
     @property
     def x(self):
@@ -252,22 +242,6 @@ class Place:
             return self.entities[-1].name
         return BACKGROUND_PIC
 
-    def _reset_sprite(self):
-        from .app import app
-        screen_width, screen_height = app.window.get_size()
-        sprite_width = screen_width // ROOM_WIDTH
-        sprite_height = screen_height // ROOM_HEIGHT
-        texture = arcade.load_texture(file_name="%s/%s.png" % (GFX_DIR, self.top_entity_name))
-        scale = min(sprite_width / texture.width, sprite_height / texture.height)
-        self.sprite = arcade.Sprite(scale=scale)
-        self.sprite.append_texture(texture)
-        self.sprite.set_texture(0)
-        self.sprite.left = self.sprite.width * self.x
-        self.sprite.top = screen_height - self.sprite.height * self.y
-
-    def on_screen_resize(self):
-        self._reset_sprite()
-
     @staticmethod
     def normalize_name(name):
         """
@@ -279,32 +253,42 @@ class Place:
             name = name[:-4]
         return name
 
+    def _remove_top_entity_sprite(self):
+        if self.entities and self.entities[-1].sprite in self.room.entities_sprite_list:
+            self.room.entities_sprite_list.remove(self.entities[-1].sprite)
+
+    def _add_top_entity_sprite(self):
+        if self.entities:
+            self.room.entities_sprite_list.append(self.entities[-1].sprite)
+
     def reset_entities(self):
+        self._remove_top_entity_sprite()
         del self.entities[:]
-        self._reset_sprite()
 
     def set_entity(self, entity):
         """
         :param Entity entity:
         """
+        self._remove_top_entity_sprite()
         del self.entities[:]
         if entity:
-            self.entities.append(entity)
-        self._reset_sprite()
+            self.add_entity(entity)
 
     def add_entity(self, entity):
         """
         :param Entity entity:
         """
+        self._remove_top_entity_sprite()
         self.entities.append(entity)
-        self._reset_sprite()
+        self._add_top_entity_sprite()
 
     def remove_entity(self, entity):
         """
         :param Entity entity:
         """
+        self._remove_top_entity_sprite()
         self.entities.remove(entity)
-        self._reset_sprite()
+        self._add_top_entity_sprite()
 
     def is_free(self):
         return not self.entities
@@ -322,6 +306,28 @@ class Entity:
         self.cur_world_coord = world_coord
         self.cur_room_coord = room_coord
         self.name = name
+        self.sprite = None  # type: arcade.Sprite
+        self.reset_sprite()
+
+    def update_sprite_pos(self):
+        from .app import app
+        screen_width, screen_height = app.window.get_size()
+        sprite_width = screen_width // ROOM_WIDTH
+        sprite_height = screen_height // ROOM_HEIGHT
+        self.sprite.left = self.sprite.width * self.cur_room_coord[0]
+        self.sprite.top = screen_height - self.sprite.height * self.cur_room_coord[1]
+
+    def reset_sprite(self):
+        from .app import app
+        screen_width, screen_height = app.window.get_size()
+        sprite_width = screen_width // ROOM_WIDTH
+        sprite_height = screen_height // ROOM_HEIGHT
+        texture = arcade.load_texture(file_name="%s/%s.png" % (GFX_DIR, self.name))
+        scale = min(sprite_width / texture.width, sprite_height / texture.height)
+        self.sprite = arcade.Sprite(scale=scale)
+        self.sprite.append_texture(texture)
+        self.sprite.set_texture(0)
+        self.update_sprite_pos()
 
     @property
     def cur_room(self):
@@ -341,8 +347,7 @@ class Entity:
         cur_room = self.cur_room
         if not cur_room.get_place(new_coord).is_free():
             return
-        with cur_room.update_place(self.cur_place.idx) as place:
-            place.remove_entity(self)
-        with cur_room.update_place(Room.coord_to_idx(new_coord)) as place:
-            place.add_entity(self)
+        self.cur_place.remove_entity(self)
+        self.cur_room.get_place(new_coord).add_entity(self)
         self.cur_room_coord = new_coord
+        self.update_sprite_pos()

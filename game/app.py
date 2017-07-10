@@ -37,7 +37,7 @@ class MainWindow(arcade.Window):
         Called every frame for drawing.
         """
         arcade.start_render()
-        arcade.set_background_color(arcade.color.BABY_BLUE)
+        arcade.set_background_color([127, 127, 127])
         app.game.draw()
 
     # Does not work?
