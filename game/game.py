@@ -2,7 +2,7 @@
 import arcade
 import re
 import numpy
-from typing import Set, List, Dict
+from typing import Set, List, Dict, Optional
 from .data import DATA_DIR, GFX_DIR
 
 
@@ -21,8 +21,8 @@ WORLD_HEIGHT = 4
 ROOM_WIDTH = 20
 ROOM_HEIGHT = 20
 # entity/item/place count in the knapsack
-KNAPSACK_WIDTH = 10
-KNAPSACK_HEIGHT = 5
+KNAPSACK_WIDTH = 3
+KNAPSACK_HEIGHT = 9
 KNAPSACK_MAX = 27  # compatibility with Robot1 (9*3)
 
 COMPUTER_CONTROL_INTERVAL = 750  # timer-interval for computer player control
@@ -46,6 +46,7 @@ class Game:
         self.human_player = self.world.find_human_player()
 
     def draw(self):
+        self.human_player.knapsack.draw()
         self.cur_room.draw()
 
     def on_screen_resize(self):
@@ -131,13 +132,17 @@ class World:
             if name != BACKGROUND_PIC:
                 entity = Entity(
                     room=self.rooms[cur_room_idx],
-                    room_coord=Room.idx_to_coord(cur_place_idx),
+                    room_coord=self.rooms[cur_room_idx].idx_to_coord(cur_place_idx),
                     name=name)
             else:
                 entity = None
             if name in PLAYER_PICS:
                 if name == PLAYER_PIC:
                     entity.lives = 3
+                    entity.knapsack = Room(
+                        world=self,
+                        width=KNAPSACK_WIDTH, height=KNAPSACK_HEIGHT,
+                        screen_offset=(ROOM_WIDTH + 1, 0))
                 self.rooms[cur_room_idx].players.append(entity)
             self.rooms[cur_room_idx].places[cur_place_idx].set_entity(entity)
             cur_place_idx += 1
@@ -149,45 +154,48 @@ class World:
 
 
 class Room:
-    def __init__(self, world, idx):
+    def __init__(self, world, idx=None, width=ROOM_WIDTH, height=ROOM_HEIGHT, screen_offset=(0, 0)):
         """
         :param World world:
-        :param int idx:
+        :param int|None idx: room idx in the world, such that world.rooms[idx] is self
+        :param int width: number of places in width
+        :param int height: number of places in height
+        :param (int,int) screen_offset: place-size screen offset
         """
         self.world = world
         self.idx = idx
-        self.places = [Place(room=self, idx=i) for i in range(ROOM_WIDTH * ROOM_HEIGHT)]
+        self.screen_offset = screen_offset
+        self.width = width
+        self.height = height
+        self.places = [Place(room=self, idx=i) for i in range(width * height)]
         self.players = []  # type: List[Entity]
         self.entities_sprite_list = arcade.SpriteList()
 
-    @staticmethod
-    def valid_coord(coord):
+    def valid_coord(self, coord):
         """
         :param (int,int)|numpy.ndarray coord:
         :rtype: bool
         """
         x, y = coord
-        return 0 <= x < ROOM_WIDTH and 0 <= y < ROOM_HEIGHT
+        return 0 <= x < self.width and 0 <= y < self.height
 
-    @staticmethod
-    def coord_to_idx(coord):
+    def coord_to_idx(self, coord):
         """
         :param (int,int)|numpy.ndarray coord:
         :rtype: int
         """
-        assert Room.valid_coord(coord)
+        assert self.valid_coord(coord)
         x, y = coord
-        return y * ROOM_WIDTH + x
+        return y * self.width + x
 
-    @staticmethod
-    def idx_to_coord(idx):
+    def idx_to_coord(self, idx):
         """
         :param int idx:
         :return: (x,y) coord
         :rtype: numpy.ndarray
         """
-        x = idx % ROOM_WIDTH
-        y = idx // ROOM_WIDTH
+        x = idx % self.width
+        y = idx // self.width
         return numpy.array([x, y])
 
     def get_place(self, coord):
@@ -203,6 +211,15 @@ class Room:
         self.places[self.coord_to_idx(coord)].reset_entities()
 
     def draw(self):
+        from .app import app
+        screen_width = app.window.room_pixel_size * self.width
+        screen_height = app.window.room_pixel_size * self.height
+        arcade.draw_rectangle_filled(
+            center_x=self.screen_offset[0] * app.window.room_pixel_size + screen_width // 2,
+            center_y=app.window.height - (
+                self.screen_offset[1] * app.window.room_pixel_size + screen_height // 2),
+            width=screen_width, height=screen_height,
+            color=[127, 127, 127])
         self.entities_sprite_list.draw()
 
     def on_screen_resize(self):
@@ -316,6 +333,7 @@ class Entity:
         self.room_coord = room_coord
         self.name = name
         self.door_keys = set()  # type: Set[int]
+        self.knapsack = None  # type: Optional[Room]
         self.scores = 0
         self.lives = 0
         self.is_alive = True
@@ -328,17 +346,14 @@ class Entity:
 
     def update_sprite_pos(self):
         from .app import app
-        screen_width, screen_height = app.window.get_size()
-        self.sprite.left = self.sprite.width * self.room_coord[0]
-        self.sprite.top = screen_height - self.sprite.height * self.room_coord[1]
+        self.sprite.left = self.sprite.width * self.room_coord[0] + self.room.screen_offset[0]
+        self.sprite.top = app.window.height - (
+            self.sprite.height * self.room_coord[1] + self.room.screen_offset[1])
 
     def reset_sprite(self):
         from .app import app
-        screen_width, screen_height = app.window.get_size()
-        sprite_width = screen_width // ROOM_WIDTH
-        sprite_height = screen_height // ROOM_HEIGHT
         texture = arcade.load_texture(file_name="%s/%s.png" % (GFX_DIR, self.name))
-        scale = min(sprite_width / texture.width, sprite_height / texture.height)
+        scale = app.window.room_pixel_size / texture.width
         self.sprite = arcade.Sprite(scale=scale)
         self.sprite.append_texture(texture)
         self.sprite.set_texture(0)

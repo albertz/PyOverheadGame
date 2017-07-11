@@ -1,12 +1,8 @@
 
 import arcade
+from . import game
 from .game import Game
 
-# SCREEN_WIDTH = 800
-# SCREEN_HEIGHT = 600
-# match the ratio of ROOM_WIDTH/ROOM_HEIGHT
-SCREEN_WIDTH = 4 * 150
-SCREEN_HEIGHT = 4 * 150
 
 app = None  # type: App
 
@@ -29,15 +25,18 @@ class MainWindow(arcade.Window):
     """ Main application class. """
 
     def __init__(self):
+        self.room_pixel_size = 30
+        width = self.room_pixel_size * (game.ROOM_WIDTH + 1 + game.KNAPSACK_WIDTH)
+        height = self.room_pixel_size * (game.ROOM_HEIGHT + 1)
         super(MainWindow, self).__init__(
-            width=SCREEN_WIDTH, height=SCREEN_HEIGHT, title="PyOverheadGame!")
+            width=width, height=height, title="PyOverheadGame!")
 
     def on_draw(self):
         """
         Called every frame for drawing.
         """
         arcade.start_render()
-        arcade.set_background_color([127, 127, 127])
+        arcade.set_background_color(arcade.color.BABY_BLUE)
         app.game.draw()
 
     # Does not work?
