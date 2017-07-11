@@ -11,7 +11,14 @@ GAME_DATA_DIR = DATA_DIR + "/game"
 PICTURE_SIZE = 30
 BACKGROUND_PIC = 'hinter'
 PLAYER_PIC = "figur"
-PLAYER_PICS = ['figur', 'konig'] + ['robot%i' % i for i in range(1, 10)]
+ROBOT_PICS = ["konig"] + ['robot%i' % i for i in range(1, 10)]
+PLAYER_PICS = [PLAYER_PIC] + ROBOT_PICS
+KEY_PICS = ["schl%i" % i for i in range(1, 10)]
+DOOR_PICS = ["tuer%i" % i for i in range(1, 10)]
+DIAMOND_PICS = ["diamant%i" % i for i in range(1, 4)]
+CODE_PICS = ["code%i" % i for i in range(1, 4)]
+COLLECTABLE_PICS = ["speicher", "aetz", "leben"] + KEY_PICS + DIAMOND_PICS
+SCORES_PICS = ["punkt%i" % i for i in range(1, 6)]
 ERROR_PIC = 'error'  # used for error-displaying
 
 # room count
@@ -46,8 +53,8 @@ class Game:
         self.human_player = self.world.find_human_player()
 
     def draw(self):
-        self.human_player.knapsack.draw()
         self.cur_room.draw()
+        self.human_player.knapsack.draw()
 
     def on_screen_resize(self):
         for room in self.world.rooms:
@@ -230,6 +237,38 @@ class Room:
             if place.entities:
                 self.entities_sprite_list.append(place.entities[-1].sprite)
 
+    def count_entities(self):
+        """
+        :return: total number of entities in this room
+        :rtype: int
+        """
+        c = 0
+        for place in self.places:
+            c += len(place.entities)
+        return c
+
+    def have_entity_name(self, name):
+        """
+        :param str name:
+        :return: whether we have an entity with this name
+        :rtype: bool
+        """
+        for place in self.places:
+            for entity in place.entities:
+                if entity.name == name:
+                    return True
+        return False
+
+    def find_free_place(self):
+        """
+        :return: a place where there is no entity, or None
+        :rtype: None|Place
+        """
+        for place in self.places:
+            if not place.entities:
+                return place
+        return None
+
 
 class Place:
     def __init__(self, room, idx):
@@ -332,7 +371,6 @@ class Entity:
         self.room = room
         self.room_coord = room_coord
         self.name = name
-        self.door_keys = set()  # type: Set[int]
         self.knapsack = None  # type: Optional[Room]
         self.scores = 0
         self.lives = 0
@@ -346,9 +384,11 @@ class Entity:
 
     def update_sprite_pos(self):
         from .app import app
-        self.sprite.left = self.sprite.width * self.room_coord[0] + self.room.screen_offset[0]
+        self.sprite.left = self.sprite.width * self.room_coord[0] + \
+                           self.room.screen_offset[0] * app.window.room_pixel_size
         self.sprite.top = app.window.height - (
-            self.sprite.height * self.room_coord[1] + self.room.screen_offset[1])
+            self.sprite.height * self.room_coord[1] +
+            self.room.screen_offset[1] * app.window.room_pixel_size)
 
     def reset_sprite(self):
         from .app import app
@@ -374,9 +414,16 @@ class Entity:
             return
         if not self.room.get_place(new_coord).is_allowed_to_add_entity(self):
             return
+        self.move_to_place(self.room.get_place(new_coord))
+
+    def move_to_place(self, place):
+        """
+        :param Place place:
+        """
         self.place.remove_entity(self)
-        self.room_coord = new_coord
-        self.room.get_place(new_coord).add_entity(self)
+        self.room = place.room
+        self.room_coord = place.coord
+        place.add_entity(self)
         self.update_sprite_pos()
 
     def kill(self):
@@ -402,16 +449,19 @@ def is_allowed_together(entities):
         return False
     if any(["code%i" % i in entity_names_map for i in range(1, 4)]):
         return False
-    doors = [i for i in range(1, 10) if "tuer%i" % i in entity_names_map]
+    doors = [door for door in DOOR_PICS if door in entity_names_map]
     if doors:
         if len(doors) > 1:
             return False
-        door_idx = doors[0]
-        door = "tuer%i" % door_idx
+        door = doors[0]
+        door_idx = DOOR_PICS.index(doors[0])
+        door_key = KEY_PICS[door_idx]
         for entity in entities:
             if entity.name == door:
                 continue
-            if door_idx not in entity.door_keys:
+            if not entity.knapsack:
+                continue
+            if not entity.knapsack.have_entity_name(door_key):
                 return False
         return True
     robots = [entity for entity in entities if entity.name in PLAYER_PICS and entity.name != PLAYER_PIC]
@@ -451,7 +501,7 @@ def on_joined_together(world, entities):
             robots.remove(robot)
         if not human.is_alive:
             human_players.remove(human)
-    points = [entity for entity in entities if entity.name.startswith("punkt")]
+    points = [entity for entity in entities if entity.name in SCORES_PICS]
     while human_players and points:
         for human in human_players:
             if not points:
@@ -461,3 +511,13 @@ def on_joined_together(world, entities):
             point.kill()
             if not point.is_alive:
                 points.remove(point)
+    collectable = [entity for entity in entities if entity.name in COLLECTABLE_PICS]
+    while human_players and collectable:
+        for human in human_players:
+            if not collectable:
+                break
+            place = human.knapsack.find_free_place()
+            if not place:
+                continue
+            item = collectable.pop(0)
+            item.move_to_place(place)
