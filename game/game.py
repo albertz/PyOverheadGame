@@ -130,8 +130,7 @@ class World:
             name = Place.normalize_name(l)
             if name != BACKGROUND_PIC:
                 entity = Entity(
-                    world=self,
-                    world_coord=World.idx_to_coord(cur_room_idx),
+                    room=self.rooms[cur_room_idx],
                     room_coord=Room.idx_to_coord(cur_place_idx),
                     name=name)
             else:
@@ -307,16 +306,14 @@ class Place:
 
 
 class Entity:
-    def __init__(self, world, world_coord, room_coord, name):
+    def __init__(self, room, room_coord, name):
         """
-        :param World world:
-        :param numpy.ndarray world_coord:
+        :param Room room:
         :param numpy.ndarray room_coord:
         :param str name: e.g. "figur"
         """
-        self.world = world
-        self.cur_world_coord = world_coord
-        self.cur_room_coord = room_coord
+        self.room = room
+        self.room_coord = room_coord
         self.name = name
         self.door_keys = set()  # type: Set[int]
         self.scores = 0
@@ -327,13 +324,13 @@ class Entity:
 
     def __repr__(self):
         return "<Entity %r in room %r in place %r>" % (
-            self.name, tuple(self.cur_world_coord), tuple(self.cur_room_coord))
+            self.name, self.room, tuple(self.room_coord))
 
     def update_sprite_pos(self):
         from .app import app
         screen_width, screen_height = app.window.get_size()
-        self.sprite.left = self.sprite.width * self.cur_room_coord[0]
-        self.sprite.top = screen_height - self.sprite.height * self.cur_room_coord[1]
+        self.sprite.left = self.sprite.width * self.room_coord[0]
+        self.sprite.top = screen_height - self.sprite.height * self.room_coord[1]
 
     def reset_sprite(self):
         from .app import app
@@ -348,12 +345,8 @@ class Entity:
         self.update_sprite_pos()
 
     @property
-    def cur_room(self):
-        return self.world.rooms[World.coord_to_idx(self.cur_world_coord)]
-
-    @property
-    def cur_place(self):
-        return self.cur_room.get_place(self.cur_room_coord)
+    def place(self):
+        return self.room.get_place(self.room_coord)
 
     def move(self, relative):
         """
@@ -361,22 +354,21 @@ class Entity:
         """
         if not self.is_alive:
             return
-        new_coord = self.cur_room_coord + relative
-        if not Room.valid_coord(new_coord):
+        new_coord = self.room_coord + relative
+        if not self.room.valid_coord(new_coord):
             return
-        cur_room = self.cur_room
-        if not cur_room.get_place(new_coord).is_allowed_to_add_entity(self):
+        if not self.room.get_place(new_coord).is_allowed_to_add_entity(self):
             return
-        self.cur_place.remove_entity(self)
-        self.cur_room_coord = new_coord
-        self.cur_room.get_place(new_coord).add_entity(self)
+        self.place.remove_entity(self)
+        self.room_coord = new_coord
+        self.room.get_place(new_coord).add_entity(self)
         self.update_sprite_pos()
 
     def kill(self):
         if self.lives > 0:
             self.lives -= 1
             return
-        self.cur_place.remove_entity(self)
+        self.place.remove_entity(self)
         self.is_alive = False
 
 
