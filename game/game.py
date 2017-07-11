@@ -1,9 +1,8 @@
 
 import arcade
 import re
-import contextlib
 import numpy
-from typing import Set, List
+from typing import Set, List, Dict
 from .data import DATA_DIR, GFX_DIR
 
 
@@ -138,6 +137,8 @@ class World:
             else:
                 entity = None
             if name in PLAYER_PICS:
+                if name == PLAYER_PIC:
+                    entity.lives = 3
                 self.rooms[cur_room_idx].players.append(entity)
             self.rooms[cur_room_idx].places[cur_place_idx].set_entity(entity)
             cur_place_idx += 1
@@ -281,6 +282,7 @@ class Place:
         self._remove_top_entity_sprite()
         self.entities.append(entity)
         self._add_top_entity_sprite()
+        self.on_add_entity()
 
     def remove_entity(self, entity):
         """
@@ -292,6 +294,16 @@ class Place:
 
     def is_free(self):
         return not self.entities
+
+    def is_allowed_to_add_entity(self, entity):
+        """
+        :param Entity entity:
+        :rtype: bool
+        """
+        return is_allowed_together(self.entities + [entity])
+
+    def on_add_entity(self):
+        on_joined_together(world=self.room.world, entities=self.entities)
 
 
 class Entity:
@@ -307,14 +319,19 @@ class Entity:
         self.cur_room_coord = room_coord
         self.name = name
         self.door_keys = set()  # type: Set[int]
+        self.scores = 0
+        self.lives = 0
+        self.is_alive = True
         self.sprite = None  # type: arcade.Sprite
         self.reset_sprite()
+
+    def __repr__(self):
+        return "<Entity %r in room %r in place %r>" % (
+            self.name, tuple(self.cur_world_coord), tuple(self.cur_room_coord))
 
     def update_sprite_pos(self):
         from .app import app
         screen_width, screen_height = app.window.get_size()
-        sprite_width = screen_width // ROOM_WIDTH
-        sprite_height = screen_height // ROOM_HEIGHT
         self.sprite.left = self.sprite.width * self.cur_room_coord[0]
         self.sprite.top = screen_height - self.sprite.height * self.cur_room_coord[1]
 
@@ -342,16 +359,25 @@ class Entity:
         """
         :param numpy.ndarray relative: (x,y)
         """
+        if not self.is_alive:
+            return
         new_coord = self.cur_room_coord + relative
         if not Room.valid_coord(new_coord):
             return
         cur_room = self.cur_room
-        if not is_allowed_together(cur_room.get_place(new_coord).entities + [self]):
+        if not cur_room.get_place(new_coord).is_allowed_to_add_entity(self):
             return
         self.cur_place.remove_entity(self)
-        self.cur_room.get_place(new_coord).add_entity(self)
         self.cur_room_coord = new_coord
+        self.cur_room.get_place(new_coord).add_entity(self)
         self.update_sprite_pos()
+
+    def kill(self):
+        if self.lives > 0:
+            self.lives -= 1
+            return
+        self.cur_place.remove_entity(self)
+        self.is_alive = False
 
 
 def is_allowed_together(entities):
@@ -361,7 +387,10 @@ def is_allowed_together(entities):
     """
     if len(entities) <= 1:
         return True
-    entity_names_map = {entity.name: entity for entity in entities}
+    entity_names_map = {}  # type: Dict[str,List[Entity]]
+    for entity in entities:
+        entity_names_map.setdefault(entity.name, [])
+        entity_names_map[entity.name].append(entity)
     if any(["wand%i" % i in entity_names_map for i in range(1, 3)]):
         return False
     if any(["code%i" % i in entity_names_map for i in range(1, 4)]):
@@ -378,4 +407,50 @@ def is_allowed_together(entities):
             if door_idx not in entity.door_keys:
                 return False
         return True
+    robots = [entity for entity in entities if entity.name in PLAYER_PICS and entity.name != PLAYER_PIC]
+    if len(robots) > 1:
+        return False
     return True
+
+
+def on_joined_together(world, entities):
+    """
+    :param World world:
+    :param list[Entity] entities:
+    """
+    if len(entities) <= 1:
+        return
+    electro_walls = [entity for entity in entities if entity.name == "wand3"]
+    players = [entity for entity in entities if entity.name in PLAYER_PICS]
+    while players and electro_walls:
+        for player in players:
+            if not electro_walls:
+                break
+            electro_wall = electro_walls[0]
+            electro_wall.kill()
+            player.kill()
+            if not electro_wall.is_alive:
+                electro_walls.remove(electro_wall)
+            if not player.is_alive:
+                players.remove(player)
+    human_players = [entity for entity in players if entity.name == PLAYER_PIC]
+    robots = [entity for entity in players if entity.name != PLAYER_PIC]
+    while human_players and robots:
+        human = human_players[0]
+        robot = robots[0]
+        robot.kill()
+        human.kill()
+        if not robot.is_alive:
+            robots.remove(robot)
+        if not human.is_alive:
+            human_players.remove(human)
+    points = [entity for entity in entities if entity.name.startswith("punkt")]
+    while human_players and points:
+        for human in human_players:
+            if not points:
+                break
+            point = points[0]
+            human.scores += 1000
+            point.kill()
+            if not point.is_alive:
+                points.remove(point)
