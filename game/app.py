@@ -79,8 +79,10 @@ class MainWindow(arcade.Window):
             app.game.on_key_arrow((-1, 0))
         elif key == arcade.key.RIGHT:
             app.game.on_key_arrow((1, 0))
-        elif key == arcade.key.TAB:
+        elif key in (arcade.key.TAB, arcade.key.SPACE):
             app.game.on_key_tab()
+        elif key == arcade.key.RETURN:
+            app.game.on_key_return()
 
     def on_key_release(self, key, modifiers):
         """Called when the user releases a key. """

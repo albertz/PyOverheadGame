@@ -20,6 +20,8 @@ DIAMOND_PICS = ["diamant%i" % i for i in range(1, 4)]
 CODE_PICS = ["code%i" % i for i in range(1, 4)]
 COLLECTABLE_PICS = ["speicher", "aetz", "leben"] + KEY_PICS + DIAMOND_PICS
 SCORES_PICS = ["punkt%i" % i for i in range(1, 6)]
+BURN_PIC = "aetz"
+BURNABLE_PICS = ["wand1"]
 ERROR_PIC = 'error'  # used for error-displaying
 
 # room count
@@ -94,9 +96,19 @@ class Game:
     def on_key_tab(self):
         self.change_focus()
 
+    def on_key_return(self):
+        self.use_knapsack_selection()
+
     def change_focus(self):
         self.focus += 1
         self.focus %= NumberFocus
+
+    def use_knapsack_selection(self):
+        place = self.human_player.knapsack.selected_place
+        if not place.entities:
+            return
+        item = place.entities[-1]
+        do_item_action(player=self.human_player, item=item)
 
     def on_key_arrow(self, relative):
         """
@@ -649,3 +661,23 @@ def do_robot_action(robot, human):
             return
     # This will fail but show some intention.
     robot.move(dirs[0])
+
+
+def do_item_action(player, item):
+    """
+    :param Entity player:
+    :param Entity item:
+    """
+    room = player.room
+    if item.name == BURN_PIC:
+        for rel in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            coord = player.room_coord + numpy.array(rel)
+            if coord[0] <= 0 or coord[0] >= room.width - 1:  # including borders
+                continue
+            if coord[1] <= 0 or coord[1] >= room.height - 1:  # including borders
+                continue
+            place = room.get_place(coord)
+            for entity in list(reversed(place.entities)):
+                if entity.name in BURNABLE_PICS:
+                    entity.kill()
+        item.kill()
