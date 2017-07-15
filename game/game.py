@@ -34,6 +34,9 @@ KNAPSACK_HEIGHT = 9
 KNAPSACK_MAX = 27  # compatibility with Robot1 (9*3)
 
 COMPUTER_CONTROL_INTERVAL = 0.75  # timer-interval for computer player control
+FocusHumanPlayer = 0
+FocusKnapsack = 1
+NumberFocus = 2
 
 
 class Game:
@@ -42,6 +45,7 @@ class Game:
         self.cur_room_idx = 0
         self.human_player = None  # type: Entity
         self.dt_computer = 0.0
+        self.focus = FocusHumanPlayer
 
     @property
     def cur_room(self):
@@ -53,6 +57,7 @@ class Game:
         """
         self.world.load(filename)
         self.human_player = self.world.find_human_player()
+        self.human_player.knapsack.selected_place = self.human_player.knapsack.get_place((0, 0))
 
     def get_text_placement(self):
         from .app import app
@@ -73,20 +78,35 @@ class Game:
             start_x=p1[0] + 5, start_y=app.window.height - center[1], anchor_y="center")
 
     def draw(self):
-        self.cur_room.draw()
-        self.human_player.knapsack.draw()
         self.draw_text()
+        self.cur_room.draw()
+        if self.focus == FocusHumanPlayer:
+            self.cur_room.draw_focus()
+        self.human_player.knapsack.draw()
+        if self.focus == FocusKnapsack:
+            self.human_player.knapsack.draw_focus()
+        self.human_player.knapsack.draw_selection(focused=self.focus == FocusKnapsack)
 
     def on_screen_resize(self):
         for room in self.world.rooms:
             room.on_screen_resize()
+
+    def on_key_tab(self):
+        self.change_focus()
+
+    def change_focus(self):
+        self.focus += 1
+        self.focus %= NumberFocus
 
     def on_key_arrow(self, relative):
         """
         :param (int,int) relative: (x,y)
         """
         relative = numpy.array(relative)
-        self.human_player.move(relative)
+        if self.focus == FocusHumanPlayer:
+            self.human_player.move(relative)
+        elif self.focus == FocusKnapsack:
+            self.human_player.knapsack.move_selection(relative)
 
     def do_computer_interval(self):
         for player in self.cur_room.find_players():
@@ -205,6 +225,7 @@ class Room:
         self.width = width
         self.height = height
         self.places = [Place(room=self, idx=i) for i in range(width * height)]
+        self.selected_place = None  # type: Place
         self.players = []  # type: List[Entity]
         self.entities_sprite_list = arcade.SpriteList()
 
@@ -267,6 +288,33 @@ class Room:
             color=[127, 127, 127], **app.get_screen_pos_args(self.get_screen_placement()))
         self.entities_sprite_list.draw()
 
+    def draw_focus(self):
+        from .app import app
+        arcade.draw_rectangle_outline(
+            color=arcade.color.BLUE, **app.get_screen_pos_args(self.get_screen_placement()))
+
+    def draw_selection(self, focused=False):
+        if not self.selected_place:
+            return
+        from .app import app
+        p1 = (self.screen_offset + self.selected_place.coord) * app.window.room_pixel_size
+        size = numpy.array((app.window.room_pixel_size, app.window.room_pixel_size))
+        p2 = p1 + size
+        center = (p1 + p2) // 2
+        arcade.draw_rectangle_outline(
+            color=arcade.color.BLUE if focused else arcade.color.BLACK,
+            center_x=center[0], center_y=app.window.height - center[1],
+            width=size[0], height=size[1])
+
+    def move_selection(self, relative):
+        """
+        :param numpy.ndarray relative:
+        """
+        coord = self.selected_place.coord + relative
+        if not self.valid_coord(coord):
+            return
+        self.selected_place = self.get_place(coord)
+
     def on_screen_resize(self):
         del self.entities_sprite_list[:]
         for place in self.places:
@@ -328,11 +376,11 @@ class Place:
 
     @property
     def x(self):
-        return self.idx % ROOM_WIDTH
+        return self.idx % self.room.width
 
     @property
     def y(self):
-        return self.idx // ROOM_WIDTH
+        return self.idx // self.room.width
 
     @property
     def coord(self):
