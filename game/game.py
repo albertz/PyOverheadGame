@@ -2,6 +2,7 @@
 import arcade
 import re
 import numpy
+import random
 from typing import Set, List, Dict, Optional
 from .data import DATA_DIR, GFX_DIR
 
@@ -32,7 +33,7 @@ KNAPSACK_WIDTH = 3
 KNAPSACK_HEIGHT = 9
 KNAPSACK_MAX = 27  # compatibility with Robot1 (9*3)
 
-COMPUTER_CONTROL_INTERVAL = 750  # timer-interval for computer player control
+COMPUTER_CONTROL_INTERVAL = 0.75  # timer-interval for computer player control
 
 
 class Game:
@@ -40,6 +41,7 @@ class Game:
         self.world = World()
         self.cur_room_idx = 0
         self.human_player = None  # type: Entity
+        self.dt_computer = 0.0
 
     @property
     def cur_room(self):
@@ -67,12 +69,21 @@ class Game:
         relative = numpy.array(relative)
         self.human_player.move(relative)
 
+    def do_computer_interval(self):
+        for player in self.cur_room.find_players():
+            if player.name in ROBOT_PICS:
+                do_robot_action(robot=player, human=self.human_player)
+
     def update(self, delta_time):
         """
         Movement and game logic. This is called for every frame.
 
         :param float delta_time: how much time passed
         """
+        self.dt_computer += delta_time
+        if self.dt_computer >= COMPUTER_CONTROL_INTERVAL:
+            self.dt_computer -= COMPUTER_CONTROL_INTERVAL
+            self.do_computer_interval()
 
 
 class World:
@@ -178,6 +189,9 @@ class Room:
         self.players = []  # type: List[Entity]
         self.entities_sprite_list = arcade.SpriteList()
 
+    def __repr__(self):
+        return "<Room idx=%r>" % (self.idx,)
+
     def valid_coord(self, coord):
         """
         :param (int,int)|numpy.ndarray coord:
@@ -268,6 +282,14 @@ class Room:
             if not place.entities:
                 return place
         return None
+
+    def find_players(self):
+        players = []
+        for place in self.places:
+            for entity in place.entities:
+                if entity.name in PLAYER_PICS:
+                    players.append(entity)
+        return players
 
 
 class Place:
@@ -403,18 +425,26 @@ class Entity:
     def place(self):
         return self.room.get_place(self.room_coord)
 
-    def move(self, relative):
+    def can_move(self, relative):
         """
         :param numpy.ndarray relative: (x,y)
         """
         if not self.is_alive:
-            return
+            return False
         new_coord = self.room_coord + relative
         if not self.room.valid_coord(new_coord):
-            return
+            return False
         if not self.room.get_place(new_coord).is_allowed_to_add_entity(self):
+            return False
+        return True
+
+    def move(self, relative):
+        """
+        :param numpy.ndarray relative: (x,y)
+        """
+        if not self.can_move(relative):
             return
-        self.move_to_place(self.room.get_place(new_coord))
+        self.move_to_place(self.room.get_place(self.room_coord + relative))
 
     def move_to_place(self, place):
         """
@@ -521,3 +551,29 @@ def on_joined_together(world, entities):
                 continue
             item = collectable.pop(0)
             item.move_to_place(place)
+
+
+def do_robot_action(robot, human):
+    """
+    :param Entity robot:
+    :param Entity human:
+    """
+    relative = numpy.clip(human.room_coord - robot.room_coord, -1, 1)
+    dirs = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    random.shuffle(dirs)
+    dirs = [numpy.array(d) for d in dirs]
+    # First try to move in any direction like the human player.
+    for d in dirs:
+        if not robot.can_move(d):
+            continue
+        for i in (0, 1):
+            if relative[i] and relative[i] == d[i]:
+                robot.move(d)
+                return
+    # Now try to move in any direction.
+    for d in dirs:
+        if robot.can_move(d):
+            robot.move(d)
+            return
+    # This will fail but show some intention.
+    robot.move(dirs[0])
