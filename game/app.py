@@ -20,6 +20,21 @@ class App:
     def main(self):
         arcade.run()
 
+    def get_screen_pos_args(self, pos):
+        """
+        :param (numpy.ndarray, numpy.ndarray) pos: ((x1,y1), (x2,y2))
+        :return: center_x, center_y, width, height
+        :rtype: dict[str,int]
+        """
+        p1, p2 = pos
+        center = (p1 + p2) // 2
+        size = p2 - p1
+        return {
+            "center_x": center[0],
+            "center_y": self.window.height - center[1],
+            "width": size[0],
+            "height": size[1]}
+
 
 class MainWindow(arcade.Window):
     """ Main application class. """

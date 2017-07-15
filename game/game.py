@@ -54,9 +54,28 @@ class Game:
         self.world.load(filename)
         self.human_player = self.world.find_human_player()
 
+    def get_text_placement(self):
+        from .app import app
+        y0 = ROOM_HEIGHT * app.window.room_pixel_size
+        y1 = (ROOM_HEIGHT + 1) * app.window.room_pixel_size
+        x0 = 0
+        x1 = ROOM_WIDTH * app.window.room_pixel_size
+        return numpy.array((x0, y0)), numpy.array((x1, y1))
+
+    def draw_text(self):
+        from .app import app
+        p1, p2 = self.get_text_placement()
+        center = (p1 + p2) // 2
+        arcade.draw_rectangle_filled(color=arcade.color.WHITE, **app.get_screen_pos_args((p1, p2)))
+        txt = "Score: %i, lives: %i" % (self.human_player.scores, self.human_player.lives)
+        arcade.draw_text(
+            text=txt, color=arcade.color.BLACK,
+            start_x=p1[0] + 5, start_y=app.window.height - center[1], anchor_y="center")
+
     def draw(self):
         self.cur_room.draw()
         self.human_player.knapsack.draw()
+        self.draw_text()
 
     def on_screen_resize(self):
         for room in self.world.rooms:
@@ -182,7 +201,7 @@ class Room:
         """
         self.world = world
         self.idx = idx
-        self.screen_offset = screen_offset
+        self.screen_offset = numpy.array(screen_offset)
         self.width = width
         self.height = height
         self.places = [Place(room=self, idx=i) for i in range(width * height)]
@@ -231,16 +250,21 @@ class Room:
         """
         self.places[self.coord_to_idx(coord)].reset_entities()
 
+    def get_screen_placement(self):
+        """
+        :return: ((x1,y1), (x2,y2))
+        :rtype: (numpy.ndarray, numpy.ndarray)
+        """
+        from .app import app
+        size = numpy.array((self.width, self.height))
+        screen_size = size * app.window.room_pixel_size
+        pos = self.screen_offset * app.window.room_pixel_size
+        return pos, pos + screen_size
+
     def draw(self):
         from .app import app
-        screen_width = app.window.room_pixel_size * self.width
-        screen_height = app.window.room_pixel_size * self.height
         arcade.draw_rectangle_filled(
-            center_x=self.screen_offset[0] * app.window.room_pixel_size + screen_width // 2,
-            center_y=app.window.height - (
-                self.screen_offset[1] * app.window.room_pixel_size + screen_height // 2),
-            width=screen_width, height=screen_height,
-            color=[127, 127, 127])
+            color=[127, 127, 127], **app.get_screen_pos_args(self.get_screen_placement()))
         self.entities_sprite_list.draw()
 
     def on_screen_resize(self):
