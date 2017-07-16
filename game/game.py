@@ -20,6 +20,7 @@ DIAMOND_PICS = ["diamant%i" % i for i in range(1, 4)]
 CODE_PICS = ["code%i" % i for i in range(1, 4)]
 COLLECTABLE_PICS = ["speicher", "aetz", "leben"] + KEY_PICS + DIAMOND_PICS
 SCORES_PICS = ["punkt%i" % i for i in range(1, 6)]
+GET_LIVE_PIC = "leben"
 BURN_PIC = "aetz"
 BURNABLE_PICS = ["wand1"]
 ERROR_PIC = 'error'  # used for error-displaying
@@ -43,11 +44,14 @@ NumberFocus = 2
 
 class Game:
     def __init__(self):
-        self.world = World()
+        self.world = World(game=self)
         self.cur_room = self.world.get_room((0, 0))
         self.human_player = None  # type: Entity
         self.dt_computer = 0.0
         self.focus = FocusHumanPlayer
+        self.info_text = ""
+        self.info_text_gfx_label = None  # type: arcade.pyglet.text.Label
+        self.set_info_text("Welcome")
 
     def load(self, filename):
         """
@@ -74,6 +78,15 @@ class Game:
         arcade.draw_text(
             text=txt, color=arcade.color.BLACK,
             start_x=p1[0] + 5, start_y=app.window.height - center[1], anchor_y="center")
+        if self.info_text_gfx_label:
+            arcade.render_text(
+                self.info_text_gfx_label,
+                start_x=p1[0] + 150, start_y=app.window.height - center[1])
+
+    def set_info_text(self, info_txt):
+        self.info_text = info_txt
+        self.info_text_gfx_label = arcade.create_text(
+            info_txt, color=arcade.color.BLUE, anchor_y="center")
 
     def draw(self):
         self.draw_text()
@@ -135,7 +148,11 @@ class Game:
 
 
 class World:
-    def __init__(self):
+    def __init__(self, game):
+        """
+        :param Game game:
+        """
+        self.game = game
         self.rooms = [Room(world=self, idx=i) for i in range(WORLD_WIDTH * WORLD_HEIGHT)]
 
     @staticmethod
@@ -486,7 +503,7 @@ class Place:
         return is_allowed_together(self.entities + [entity])
 
     def on_add_entity(self):
-        on_joined_together(world=self.room.world, entities=self.entities)
+        on_joined_together(self.entities)
 
 
 class Entity:
@@ -566,6 +583,8 @@ class Entity:
         if self.lives > 0:
             self.lives -= 1
             return
+        if self is self.room.world.game.human_player:
+            self.room.world.game.set_info_text("Very sad, you are dead.")
         self.place.remove_entity(self)
         self.is_alive = False
 
@@ -606,9 +625,8 @@ def is_allowed_together(entities):
     return True
 
 
-def on_joined_together(world, entities):
+def on_joined_together(entities):
     """
-    :param World world:
     :param list[Entity] entities:
     """
     if len(entities) <= 1:
@@ -654,6 +672,7 @@ def on_joined_together(world, entities):
                 break
             place = human.knapsack.find_free_place()
             if not place:
+                human.room.world.game.set_info_text("No free place in your knapsack.")
                 continue
             item = collectable.pop(0)
             item.move_to_place(place)
@@ -692,6 +711,7 @@ def do_item_action(player, item):
     """
     room = player.room
     if item.name == BURN_PIC:
+        count = 0
         for rel in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             coord = player.room_coord + numpy.array(rel)
             if coord[0] <= 0 or coord[0] >= room.width - 1:  # including borders
@@ -702,4 +722,12 @@ def do_item_action(player, item):
             for entity in list(reversed(place.entities)):
                 if entity.name in BURNABLE_PICS:
                     entity.kill()
+                    count += 1
+        if count > 0:
+            item.kill()
+        else:
+            player.room.world.game.set_info_text("Cannot burn anything here.")
+    if item.name == GET_LIVE_PIC:
+        player.lives += 1
+        player.room.world.game.set_info_text("You got an extra live.")
         item.kill()
