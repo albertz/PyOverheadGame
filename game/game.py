@@ -44,14 +44,10 @@ NumberFocus = 2
 class Game:
     def __init__(self):
         self.world = World()
-        self.cur_room_idx = 0
+        self.cur_room = self.world.get_room((0, 0))
         self.human_player = None  # type: Entity
         self.dt_computer = 0.0
         self.focus = FocusHumanPlayer
-
-    @property
-    def cur_room(self):
-        return self.world.rooms[self.cur_room_idx]
 
     def load(self, filename):
         """
@@ -117,6 +113,7 @@ class Game:
         relative = numpy.array(relative)
         if self.focus == FocusHumanPlayer:
             self.human_player.move(relative)
+            self.cur_room = self.human_player.room
         elif self.focus == FocusKnapsack:
             self.human_player.knapsack.move_selection(relative)
 
@@ -170,6 +167,13 @@ class World:
         x = idx % WORLD_WIDTH
         y = idx // WORLD_WIDTH
         return numpy.array([x, y])
+
+    def get_room(self, coord):
+        """
+        :param (int,int)|numpy.ndarray coord:
+        :rtype: Room
+        """
+        return self.rooms[self.coord_to_idx(coord)]
 
     def find_human_player(self):
         """
@@ -244,6 +248,12 @@ class Room:
     def __repr__(self):
         return "<Room idx=%r>" % (self.idx,)
 
+    @property
+    def world_coord(self):
+        x = self.idx % WORLD_WIDTH
+        y = self.idx // WORLD_WIDTH
+        return numpy.array((x, y))
+
     def valid_coord(self, coord):
         """
         :param (int,int)|numpy.ndarray coord:
@@ -275,6 +285,18 @@ class Room:
         """
         :param (int,int)|numpy.ndarray coord:
         """
+        coord = numpy.array(coord)
+        if not self.valid_coord(coord):
+            assert self.idx is not None
+            world_size = numpy.array((WORLD_WIDTH, WORLD_HEIGHT))
+            room_size = numpy.array((self.width, self.height))
+            world_room_coord = self.world_coord * room_size + coord
+            world_room_coord %= world_size * room_size
+            world_coord = world_room_coord // room_size
+            coord = world_room_coord % room_size
+            room = self.world.get_room(world_coord)
+            assert room.valid_coord(coord)
+            return room.get_place(coord)
         return self.places[self.coord_to_idx(coord)]
 
     def reset_place(self, coord):
@@ -517,7 +539,7 @@ class Entity:
             return False
         new_coord = self.room_coord + relative
         if not self.room.valid_coord(new_coord):
-            return False
+            return True  # we will just always switch to a new room in this case
         if not self.room.get_place(new_coord).is_allowed_to_add_entity(self):
             return False
         return True
