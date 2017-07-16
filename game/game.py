@@ -118,6 +118,12 @@ class Game:
             return
         item = place.entities[-1]
         do_item_action(player=self.human_player, item=item)
+        if not item.place.entities:  # if item was used/killed
+            # Select any other such item in the knapsack, if there is one.
+            others = self.human_player.knapsack.find_entities([item.name])
+            if others:
+                self.human_player.knapsack.selected_place = others[0].place
+        self.focus = FocusHumanPlayer
 
     def on_key_arrow(self, relative):
         """
@@ -406,13 +412,21 @@ class Room:
                 return place
         return None
 
-    def find_players(self):
-        players = []
+    def find_entities(self, entity_names):
+        """
+        :param list[str] entity_names:
+        :return: list of entities
+        :rtype: list[Entity]
+        """
+        entities = []
         for place in self.places:
             for entity in place.entities:
-                if entity.name in PLAYER_PICS:
-                    players.append(entity)
-        return players
+                if entity.name in entity_names:
+                    entities.append(entity)
+        return entities
+
+    def find_players(self):
+        return self.find_entities(PLAYER_PICS)
 
 
 class Place:
