@@ -37,9 +37,10 @@ KNAPSACK_HEIGHT = 9
 KNAPSACK_MAX = 27  # compatibility with Robot1 (9*3)
 
 COMPUTER_CONTROL_INTERVAL = 0.75  # timer-interval for computer player control
-FocusHumanPlayer = 0
-FocusKnapsack = 1
-NumberFocus = 2
+
+GameFocusHumanPlayer = 0
+GameFocusKnapsack = 1
+NumberGameFocus = 2
 
 
 class Game:
@@ -48,10 +49,15 @@ class Game:
         self.cur_room = self.world.get_room((0, 0))
         self.human_player = None  # type: Entity
         self.dt_computer = 0.0
-        self.focus = FocusHumanPlayer
+        self.menu_stack = [MainMenu(game=self)]  # type: list[Menu]
+        self.game_focus = GameFocusHumanPlayer
         self.info_text = ""
         self.info_text_gfx_label = None  # type: arcade.pyglet.text.Label
         self.set_info_text("Welcome")
+
+    @property
+    def menu_is_visible(self):
+        return len(self.menu_stack) > 0
 
     def load(self, filename):
         """
@@ -84,6 +90,10 @@ class Game:
                 self.info_text_gfx_label,
                 start_x=p1[0] + label.content_width + 20, start_y=app.window.height - center[1])
 
+    def draw_menu(self):
+        for menu in self.menu_stack:
+            menu.draw()
+
     def set_info_text(self, info_txt):
         self.info_text = info_txt
         self.info_text_gfx_label = arcade.create_text(
@@ -92,26 +102,60 @@ class Game:
     def draw(self):
         self.draw_text()
         self.cur_room.draw()
-        if self.focus == FocusHumanPlayer:
+        if not self.menu_is_visible and self.game_focus == GameFocusHumanPlayer:
             self.cur_room.draw_focus()
         self.human_player.knapsack.draw()
-        if self.focus == FocusKnapsack:
+        if not self.menu_is_visible and self.game_focus == GameFocusKnapsack:
             self.human_player.knapsack.draw_focus()
-        self.human_player.knapsack.draw_selection(focused=self.focus == FocusKnapsack)
+        self.human_player.knapsack.draw_selection(
+            focused=self.game_focus == GameFocusKnapsack and not self.menu_is_visible)
+        if self.menu_is_visible:
+            self.draw_menu()
 
     def on_screen_resize(self):
         for room in self.world.rooms:
             room.on_screen_resize()
 
     def on_key_tab(self):
-        self.change_focus()
+        if self.menu_is_visible:
+            self.menu_stack[-1].switch_focus()
+        else:
+            self.change_game_focus()
 
     def on_key_return(self):
-        self.use_knapsack_selection()
+        if self.menu_is_visible:
+            self.menu_stack[-1].do_action()
+        else:
+            self.use_knapsack_selection()
 
-    def change_focus(self):
-        self.focus += 1
-        self.focus %= NumberFocus
+    def on_key_escape(self):
+        if not self.menu_is_visible:
+            self.menu_stack.append(MainMenu(game=self))
+        else:
+            if isinstance(self.menu_stack[-1], MainMenu):
+                del self.menu_stack[-1]
+
+    def on_key_arrow(self, relative):
+        """
+        :param (int,int) relative: (x,y)
+        """
+        relative = numpy.array(relative)
+        if self.menu_is_visible:
+            self.menu_stack[-1].switch_focus(sum(relative))
+        else:  # game
+            if self.game_focus == GameFocusHumanPlayer:
+                self.human_player.move(relative)
+                self.cur_room = self.human_player.room
+            elif self.game_focus == GameFocusKnapsack:
+                self.human_player.knapsack.move_selection(relative)
+
+    def change_game_focus(self):
+        self.game_focus += 1
+        self.game_focus %= NumberGameFocus
+
+    def exit(self):
+        import sys
+        sys.exit()
 
     def use_knapsack_selection(self):
         place = self.human_player.knapsack.selected_place
@@ -124,18 +168,7 @@ class Game:
             others = self.human_player.knapsack.find_entities([item.name])
             if others:
                 self.human_player.knapsack.selected_place = others[0].place
-        self.focus = FocusHumanPlayer
-
-    def on_key_arrow(self, relative):
-        """
-        :param (int,int) relative: (x,y)
-        """
-        relative = numpy.array(relative)
-        if self.focus == FocusHumanPlayer:
-            self.human_player.move(relative)
-            self.cur_room = self.human_player.room
-        elif self.focus == FocusKnapsack:
-            self.human_player.knapsack.move_selection(relative)
+        self.game_focus = GameFocusHumanPlayer
 
     def do_computer_interval(self):
         for player in self.cur_room.find_players():
@@ -148,10 +181,83 @@ class Game:
 
         :param float delta_time: how much time passed
         """
+        if self.menu_is_visible:
+            return
         self.dt_computer += delta_time
         if self.dt_computer >= COMPUTER_CONTROL_INTERVAL:
             self.dt_computer -= COMPUTER_CONTROL_INTERVAL
             self.do_computer_interval()
+
+
+class Menu:
+    def __init__(self, game, actions):
+        """
+        :param Game game:
+        :param list[(str,()->None)] actions:
+        """
+        self.game = game
+        self.selected_action_index = 0
+        self.actions = actions
+        self.border_size = 20
+        self.labels = [
+            arcade.create_text(
+                act[0], color=arcade.color.BLACK, anchor_y="center", font_size=20)
+            for act in actions]
+        self.label_width = max([label.content_width for label in self.labels]) + 30
+        self.label_height = max([label.content_height for label in self.labels]) + 10
+        self.label_step_size = 5
+
+    def close(self):
+        self.game.menu_stack.remove(self)
+
+    def draw(self):
+        from .app import app
+        center_x = app.window.width // 2
+        height = self.label_height * len(self.labels)
+        height += self.label_step_size * (len(self.labels) - 1)
+        height += self.border_size * 2
+        background_size_args = dict(
+            center_x=center_x, center_y=app.window.height // 2,
+            width=self.label_width + self.border_size * 2,
+            height=height)
+        arcade.draw_rectangle_filled(color=arcade.color.WHITE, **background_size_args)
+        arcade.draw_rectangle_outline(color=arcade.color.BLUE, **background_size_args)
+        y = (app.window.height - height) // 2
+        y += self.border_size + self.label_height // 2
+        for i, label in enumerate(self.labels):
+            focused = i == self.selected_action_index
+            arcade.draw_rectangle_filled(
+                color=arcade.color.BABY_BLUE if focused else arcade.color.BLUE_GRAY,
+                center_x=center_x, center_y=app.window.height - y,
+                width=self.label_width, height=self.label_height)
+            arcade.draw_rectangle_outline(
+                color=arcade.color.BLUE if focused else arcade.color.BLACK,
+                center_x=center_x, center_y=app.window.height - y,
+                width=self.label_width, height=self.label_height)
+            arcade.render_text(
+                label,
+                start_x=center_x - label.content_width // 2, start_y=app.window.height - y)
+            y += self.label_height + self.label_step_size
+
+    def switch_focus(self, relative=1):
+        self.selected_action_index += relative
+        self.selected_action_index %= len(self.actions)
+
+    def do_action(self):
+        self.actions[self.selected_action_index][1]()
+
+
+class MainMenu(Menu):
+    def __init__(self, game):
+        """
+        :param Game game:
+        """
+        super(MainMenu, self).__init__(game=game, actions=[
+            ("Play", self.close),
+            ("Load", lambda: None),
+            ("Save", lambda: None),
+            ("Exit", game.exit)
+        ])
 
 
 class World:
