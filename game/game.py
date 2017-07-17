@@ -75,13 +75,14 @@ class Game:
         center = (p1 + p2) // 2
         arcade.draw_rectangle_filled(color=arcade.color.WHITE, **app.get_screen_pos_args((p1, p2)))
         txt = "Score: %i, lives: %i" % (self.human_player.scores, self.human_player.lives)
-        arcade.draw_text(
-            text=txt, color=arcade.color.BLACK,
-            start_x=p1[0] + 5, start_y=app.window.height - center[1], anchor_y="center")
+        label = arcade.create_text(txt, color=arcade.color.BLACK, anchor_y="center")
+        arcade.render_text(
+            label,
+            start_x=p1[0] + 5, start_y=app.window.height - center[1])
         if self.info_text_gfx_label:
             arcade.render_text(
                 self.info_text_gfx_label,
-                start_x=p1[0] + 150, start_y=app.window.height - center[1])
+                start_x=p1[0] + label.content_width + 20, start_y=app.window.height - center[1])
 
     def set_info_text(self, info_txt):
         self.info_text = info_txt
