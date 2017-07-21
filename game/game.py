@@ -51,6 +51,7 @@ class Game:
         self.dt_computer = 0.0
         self.menu_stack = [MainMenu(game=self)]  # type: list[Menu]
         self.game_focus = GameFocusHumanPlayer
+        self.game_text_gfx_label = None  # type: arcade.pyglet.text.Label
         self.info_text = ""
         self.info_text_gfx_label = None  # type: arcade.pyglet.text.Label
         self.set_info_text("Welcome")
@@ -81,14 +82,15 @@ class Game:
         center = (p1 + p2) // 2
         arcade.draw_rectangle_filled(color=arcade.color.WHITE, **app.get_screen_pos_args((p1, p2)))
         txt = "Score: %i, lives: %i" % (self.human_player.scores, self.human_player.lives)
-        label = arcade.create_text(txt, color=arcade.color.BLACK, anchor_y="center")
+        if not self.game_text_gfx_label or self.game_text_gfx_label.text != txt:
+            self.game_text_gfx_label = arcade.create_text(txt, color=arcade.color.BLACK, anchor_y="center")
         arcade.render_text(
-            label,
+            self.game_text_gfx_label,
             start_x=p1[0] + 5, start_y=app.window.height - center[1])
         if self.info_text_gfx_label:
             arcade.render_text(
                 self.info_text_gfx_label,
-                start_x=p1[0] + label.content_width + 20, start_y=app.window.height - center[1])
+                start_x=p1[0] + self.game_text_gfx_label.content_width + 20, start_y=app.window.height - center[1])
 
     def draw_menu(self):
         for menu in self.menu_stack:
@@ -256,8 +258,33 @@ class MainMenu(Menu):
             ("Play", self.close),
             ("Load", lambda: None),
             ("Save", lambda: None),
+            ("Debug", lambda: game.menu_stack.append(DebugMenu(game=game))),
             ("Exit", game.exit)
         ])
+
+
+class DebugMenu(Menu):
+    def __init__(self, game):
+        """
+        :param Game game:
+        """
+        super(DebugMenu, self).__init__(game=game, actions=[
+            ("Close", self.close),
+            ("Profiler start", self.profile_start),
+            ("Profiler stop", self.profile_stop)
+        ])
+
+    def profile_start(self):
+        import yappi
+        yappi.start()
+
+    def profile_stop(self):
+        import yappi
+        yappi.stop()
+        columns = {0: ("name", 36), 1: ("ncall", 7),
+                   2: ("tsub", 8), 3: ("ttot", 8), 4: ("tavg", 8)}
+        yappi.get_func_stats().print_all(columns=columns)
+        yappi.get_thread_stats().print_all()
 
 
 class World:
