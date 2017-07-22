@@ -838,6 +838,12 @@ def on_joined_together(entities):
                 continue
             item = collectable.pop(0)
             item.move_to_place(place)
+    kill_switches = [entity for entity in entities if entity.name == "kill"]
+    if human_players and kill_switches:
+        for kill in kill_switches:
+            for robot in kill.room.find_entities(ROBOT_PICS):
+                robot.kill()
+            kill.kill()
 
 
 def do_robot_action(robot, human):
