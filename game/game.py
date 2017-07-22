@@ -18,11 +18,12 @@ KEY_PICS = ["schl%i" % i for i in range(1, 10)]
 DOOR_PICS = ["tuer%i" % i for i in range(1, 10)]
 DIAMOND_PICS = ["diamant%i" % i for i in range(1, 4)]
 CODE_PICS = ["code%i" % i for i in range(1, 4)]
-COLLECTABLE_PICS = ["speicher", "aetz", "leben"] + KEY_PICS + DIAMOND_PICS
 SCORES_PICS = ["punkt%i" % i for i in range(1, 6)]
 GET_LIVE_PIC = "leben"
 BURN_PIC = "aetz"
+SAVE_PIC = "speicher"
 BURNABLE_PICS = ["wand1"]
+COLLECTABLE_PICS = [SAVE_PIC, BURN_PIC, GET_LIVE_PIC] + KEY_PICS + DIAMOND_PICS
 ERROR_PIC = 'error'  # used for error-displaying
 
 # room count
@@ -358,7 +359,9 @@ class World:
                 loaded_rooms_idxs.add(cur_room_idx)
                 continue
             name = Place.normalize_name(l)
-            if name != BACKGROUND_PIC:
+            # We treat background just as nothing.
+            # We also ignore the save mechanism and allow to save always via the menu.
+            if name not in (BACKGROUND_PIC, SAVE_PIC):
                 entity = Entity(
                     room=self.rooms[cur_room_idx],
                     room_coord=self.rooms[cur_room_idx].idx_to_coord(cur_place_idx),
