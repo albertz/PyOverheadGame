@@ -828,13 +828,15 @@ def on_joined_together(entities):
             if not point.is_alive:
                 points.remove(point)
     collectable = [entity for entity in entities if entity.name in COLLECTABLE_PICS]
-    while human_players and collectable:
-        for human in human_players:
+    collecting_humans = list(human_players)
+    while collecting_humans and collectable:
+        for human in list(collecting_humans):
             if not collectable:
                 break
             place = human.knapsack.find_free_place()
             if not place:
                 human.room.world.game.set_info_text("No free place in your knapsack.")
+                collecting_humans.remove(human)
                 continue
             item = collectable.pop(0)
             item.move_to_place(place)
