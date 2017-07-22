@@ -173,9 +173,8 @@ class Game:
         self.game_focus = GameFocusHumanPlayer
 
     def do_computer_interval(self):
-        for player in self.cur_room.find_players():
-            if player.name in ROBOT_PICS:
-                do_robot_action(robot=player, human=self.human_player)
+        for player in self.cur_room.find_robots():
+            do_robot_action(robot=player, human=self.human_player)
 
     def update(self, delta_time):
         """
