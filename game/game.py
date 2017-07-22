@@ -562,6 +562,9 @@ class Room:
     def find_players(self):
         return self.find_entities(PLAYER_PICS)
 
+    def find_robots(self):
+        return self.find_entities(ROBOT_PICS)
+
 
 class Place:
     def __init__(self, room, idx):
@@ -675,6 +678,13 @@ class Entity:
         return "<Entity %r in room %r in place %r>" % (
             self.name, self.room, tuple(self.room_coord))
 
+    def is_at_room_edge(self):
+        if self.room_coord[0] in (0, self.room.width - 1):
+            return True
+        if self.room_coord[1] in (0, self.room.height -1):
+            return True
+        return False
+
     def update_sprite_pos(self):
         from .app import app
         self.sprite.left = self.sprite.width * self.room_coord[0] + \
@@ -756,14 +766,18 @@ def is_allowed_together(entities):
     if doors:
         if len(doors) > 1:
             return False
-        door = doors[0]
-        door_idx = DOOR_PICS.index(doors[0])
+        door_name = doors[0]
+        door = entity_names_map[door_name][0]
+        if door.is_at_room_edge() and door.room.find_robots():
+            # special rule: nothing can pass any door at an edge if there are robots alive
+            return False
+        door_idx = DOOR_PICS.index(door_name)
         door_key = KEY_PICS[door_idx]
         for entity in entities:
-            if entity.name == door:
+            if entity.name == door_name:
                 continue
             if not entity.knapsack:
-                continue
+                return False
             if not entity.knapsack.have_entity_name(door_key):
                 return False
         return True
