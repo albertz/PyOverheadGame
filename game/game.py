@@ -5,6 +5,7 @@ import numpy
 import random
 from typing import Set, List, Dict, Optional
 from .data import DATA_DIR, GFX_DIR
+from .gui import Menu, MenuStack, ChoiceMenu
 
 
 GAME_DATA_DIR = DATA_DIR + "/game"
@@ -50,7 +51,8 @@ class Game:
         self.cur_room = self.world.get_room((0, 0))
         self.human_player = None  # type: Entity
         self.dt_computer = 0.0
-        self.menu_stack = [MainMenu(game=self)]  # type: list[Menu]
+        self.menu_stack = MenuStack()
+        self.menu_stack.stack.append(MainMenu(game=self))
         self.game_focus = GameFocusHumanPlayer
         self.game_text_gfx_label = None  # type: arcade.pyglet.text.Label
         self.info_text = ""
@@ -67,12 +69,13 @@ class Game:
         self.set_info_text("Game restarted")
 
     def exit(self):
+        print("Good bye!")
         import sys
         sys.exit()
 
     @property
     def menu_is_visible(self):
-        return len(self.menu_stack) > 0
+        return self.menu_stack.is_visible()
 
     def load(self, filename):
         """
@@ -106,18 +109,14 @@ class Game:
                 self.info_text_gfx_label,
                 start_x=p1[0] + self.game_text_gfx_label.content_width + 20, start_y=app.window.height - center[1])
 
-    def draw_menu(self):
-        for menu in self.menu_stack:
-            menu.draw()
-
     def choices_menu(self, title, choices, initial_choice_idx=0):
         """
         :param str title:
         :param list[(str,()->None)] choices:
         :param int initial_choice_idx:
         """
-        self.menu_stack.append(ChoiceMenu(
-            game=self, title=title, choices=choices, initial_choice_idx=initial_choice_idx))
+        self.menu_stack.stack.append(ChoiceMenu(
+            menu_stack=self.menu_stack, title=title, choices=choices, initial_choice_idx=initial_choice_idx))
 
     def confirm_action(self, title, action):
         """
@@ -142,39 +141,38 @@ class Game:
             self.human_player.knapsack.draw_focus()
         self.human_player.knapsack.draw_selection(
             focused=self.game_focus == GameFocusKnapsack and not self.menu_is_visible)
-        if self.menu_is_visible:
-            self.draw_menu()
+        self.menu_stack.draw()
 
     def on_screen_resize(self):
         for room in self.world.rooms:
             room.on_screen_resize()
 
     def on_key_tab(self):
-        if self.menu_is_visible:
-            self.menu_stack[-1].switch_focus()
+        if self.menu_stack.is_visible():
+            self.menu_stack.stack[-1].switch_focus()
         else:
             self.change_game_focus()
 
     def on_key_return(self):
-        if self.menu_is_visible:
-            self.menu_stack[-1].do_action()
+        if self.menu_stack.is_visible():
+            self.menu_stack.stack[-1].do_action()
         else:
             self.use_knapsack_selection()
 
     def on_key_escape(self):
-        if not self.menu_is_visible:
-            self.menu_stack.append(MainMenu(game=self))
+        if not self.menu_stack.is_visible():
+            self.menu_stack.stack.append(MainMenu(game=self))
         else:
-            if isinstance(self.menu_stack[-1], MainMenu):
-                del self.menu_stack[-1]
+            if isinstance(self.menu_stack.stack[-1], MainMenu):
+                del self.menu_stack.stack[-1]
 
     def on_key_arrow(self, relative):
         """
         :param (int,int) relative: (x,y)
         """
         relative = numpy.array(relative)
-        if self.menu_is_visible:
-            self.menu_stack[-1].switch_focus(sum(relative))
+        if self.menu_stack.is_visible():
+            self.menu_stack.stack[-1].switch_focus(sum(relative))
         else:  # game
             if self.game_focus == GameFocusHumanPlayer:
                 self.human_player.move(relative)
@@ -217,117 +215,19 @@ class Game:
             self.do_computer_interval()
 
 
-class Menu:
-    def __init__(self, game, actions, title=None, initial_selected_action_index=0):
-        """
-        :param Game game:
-        :param list[(str,()->None)] actions:
-        :param str title:
-        :param int initial_selected_action_index:
-        """
-        self.game = game
-        self.selected_action_index = initial_selected_action_index
-        self.actions = actions
-        self.title = title
-        self.title_label = None
-        if title:
-            self.title_label = arcade.create_text(
-                title, color=arcade.color.BLACK, anchor_y="center", font_size=20)
-        self.border_size = 20
-        self.title_step_size = self.border_size
-        self.labels = [
-            arcade.create_text(
-                act[0], color=arcade.color.BLACK, anchor_y="center", font_size=20)
-            for act in actions]
-        self.label_width = max([label.content_width for label in self.labels]) + 30
-        self.label_height = max([label.content_height for label in self.labels]) + 10
-        self.label_step_size = 5
-
-    def close(self):
-        self.game.menu_stack.remove(self)
-
-    def draw(self):
-        from .app import app
-        center_x = app.window.width // 2
-        height = self.label_height * len(self.labels)
-        height += self.label_step_size * (len(self.labels) - 1)
-        if self.title_label:
-            height += self.title_step_size + self.title_label.content_height
-        height += self.border_size * 2
-        width = self.label_width
-        if self.title_label:
-            width = max(width, self.title_label.content_width)
-        width += self.border_size * 2
-        background_size_args = dict(
-            center_x=center_x, center_y=app.window.height // 2,
-            width=width, height=height)
-        arcade.draw_rectangle_filled(color=arcade.color.WHITE, **background_size_args)
-        arcade.draw_rectangle_outline(color=arcade.color.BLUE, **background_size_args)
-        y = (app.window.height - height) // 2
-        y += self.border_size
-        if self.title_label:
-            arcade.render_text(
-                self.title_label,
-                start_x=center_x - self.title_label.content_width // 2,
-                start_y=app.window.height - y - self.title_label.content_height // 2)
-            y += self.title_label.content_height + self.title_step_size
-        y += self.label_height // 2
-        for i, label in enumerate(self.labels):
-            focused = i == self.selected_action_index
-            arcade.draw_rectangle_filled(
-                color=arcade.color.BABY_BLUE if focused else arcade.color.BLUE_GRAY,
-                center_x=center_x, center_y=app.window.height - y,
-                width=self.label_width, height=self.label_height)
-            arcade.draw_rectangle_outline(
-                color=arcade.color.BLUE if focused else arcade.color.BLACK,
-                center_x=center_x, center_y=app.window.height - y,
-                width=self.label_width, height=self.label_height)
-            arcade.render_text(
-                label,
-                start_x=center_x - label.content_width // 2, start_y=app.window.height - y)
-            y += self.label_height + self.label_step_size
-
-    def switch_focus(self, relative=1):
-        self.selected_action_index += relative
-        self.selected_action_index %= len(self.actions)
-
-    def do_action(self):
-        self.actions[self.selected_action_index][1]()
-
-
 class MainMenu(Menu):
     def __init__(self, game):
         """
         :param Game game:
         """
-        super(MainMenu, self).__init__(game=game, title="PyOverheadGame!", actions=[
+        super(MainMenu, self).__init__(menu_stack=game.menu_stack, title="PyOverheadGame!", actions=[
             ("Play", self.close),
             ("Restart", lambda: game.confirm_action("Do you really want to restart?", game.restart)),
             ("Load", lambda: None),
             ("Save", lambda: None),
-            ("Debug", lambda: game.menu_stack.append(DebugMenu(game=game))),
+            ("Debug", lambda: game.menu_stack.stack.append(DebugMenu(game=game))),
             ("Exit", lambda: game.confirm_action("Do you really want to exit?", game.exit))
         ])
-
-
-class ChoiceMenu(Menu):
-    def __init__(self, game, choices, title, initial_choice_idx=0):
-        """
-        :param Game game:
-        :param list[(str, ()->None)] choices:
-        :param str title:
-        :param int initial_choice_idx:
-        """
-        def make_choice_callback(callback):
-            def choice_callback():
-                self.close()
-                callback()
-            return choice_callback
-        super(ChoiceMenu, self).__init__(
-            game=game, title=title, initial_selected_action_index=initial_choice_idx,
-            actions=[
-                (choice, make_choice_callback(callback))
-                for (choice, callback) in choices])
 
 
 class DebugMenu(Menu):
@@ -335,7 +235,7 @@ class DebugMenu(Menu):
         """
         :param Game game:
         """
-        super(DebugMenu, self).__init__(game=game, title="Debug", actions=[
+        super(DebugMenu, self).__init__(menu_stack=game.menu_stack, title="Debug", actions=[
             ("Close", self.close),
             ("Console print hello", lambda: print("Hello")),
             ("Profiler start", self.profile_start),
