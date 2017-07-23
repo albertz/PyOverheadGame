@@ -11,8 +11,8 @@ class WindowStack:
         return len(self.stack) > 0
 
     def draw(self):
-        for menu in self.stack:
-            menu.draw()
+        for window in self.stack:
+            window.draw()
 
     def switch_focus(self, relative=1):
         self.stack[-1].switch_focus(relative=relative)
@@ -21,10 +21,10 @@ class WindowStack:
         self.stack[-1].do_action()
 
     def on_text(self, text):
-        pass
+        self.stack[-1].on_text(text)
 
     def on_text_motion(self, motion):
-        pass
+        self.stack[-1].on_text_motion(motion)
 
 
 class Window:
@@ -166,6 +166,18 @@ class ChoiceMenu(Menu):
             **kwargs)
 
 
+class Rectangle(object):
+    """
+    Draws a rectangle into a batch.
+    """
+    def __init__(self, x1, y1, x2, y2, batch):
+        import pyglet
+        self.vertex_list = batch.add(4, pyglet.gl.GL_QUADS, None,
+            ('v2i', [x1, y1, x2, y1, x2, y2, x1, y2]),
+            ('c4B', [200, 200, 220, 255] * 4)
+        )
+
+
 class TextInput(Window):
     """
     See here:
@@ -184,7 +196,7 @@ class TextInput(Window):
 
         self.document = pyglet.text.document.UnformattedDocument("")
         self.document.set_style(0, len(self.document.text),
-            dict(color=(0, 0, 0, 255))
+            dict(color=(0, 0, 0, 255), font_size=20)
         )
         font = self.document.get_font()
         self.text_height = font.ascent - font.descent
@@ -195,10 +207,21 @@ class TextInput(Window):
 
         width, height = self.get_size()
         self.layout.x = (app.window.width - width) // 2 + self.border_size
-        self.layout.y = app.window.height - ((app.window.height - height) // 2 + self.border_size)
+        self.layout.y = -self.text_height
+
+        x = self.layout.x
+        y = self.layout.y
+        pad = 2
+        self.rectangle = Rectangle(
+            x - pad, y - pad,
+            x + self.text_width + pad, y + self.text_height + pad, self.batch)
 
     def draw(self):
         y = super(TextInput, self).draw()
+        from .app import app
+        import pyglet
+        pyglet.gl.glLoadIdentity()
+        pyglet.gl.glTranslatef(0, app.window.height - y, 0)
         self.batch.draw()
 
     def do_action(self):
