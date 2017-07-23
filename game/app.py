@@ -14,7 +14,7 @@ class App:
         app = self
         self.window = MainWindow()
         self.game = Game()
-        self.game.load("robot.sce")
+        self.game.init()
 
     # noinspection PyMethodMayBeStatic
     def main(self):
