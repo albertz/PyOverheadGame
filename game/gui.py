@@ -3,9 +3,9 @@ import arcade
 from typing import List
 
 
-class MenuStack:
+class WindowStack:
     def __init__(self):
-        self.stack = []  # type: List[Menu]
+        self.stack = []  # type: List[Window]
 
     def is_visible(self):
         return len(self.stack) > 0
@@ -14,53 +14,57 @@ class MenuStack:
         for menu in self.stack:
             menu.draw()
 
+    def switch_focus(self, relative=1):
+        self.stack[-1].switch_focus(relative=relative)
 
-class Menu:
-    def __init__(self, menu_stack, actions, title=None, initial_selected_action_index=0):
+    def do_action(self):
+        self.stack[-1].do_action()
+
+    def on_text(self, text):
+        pass
+
+    def on_text_motion(self, motion):
+        pass
+
+
+class Window:
+    def __init__(self, window_stack, title=None):
         """
-        :param MenuStack menu_stack:
-        :param list[(str,()->None)] actions:
+        :param WindowStack window_stack:
         :param str title:
-        :param int initial_selected_action_index:
         """
-        self.menu_stack = menu_stack
-        self.selected_action_index = initial_selected_action_index
-        self.actions = actions
+        self.menu_stack = window_stack
+        self.border_size = 20
         self.title = title
         self.title_label = None
         if title:
             self.title_label = arcade.create_text(
                 title, color=arcade.color.BLACK, anchor_y="center", font_size=20)
-        self.border_size = 20
         self.title_step_size = self.border_size
-        self.labels = [
-            arcade.create_text(
-                act[0], color=arcade.color.BLACK, anchor_y="center", font_size=20)
-            for act in actions]
-        self.label_width = max([label.content_width for label in self.labels]) + 30
-        self.label_height = max([label.content_height for label in self.labels]) + 10
-        self.label_step_size = 5
 
     def close(self):
         self.menu_stack.stack.remove(self)
 
+    def get_size(self):
+        raise NotImplementedError
+
     def draw(self):
+        self.draw_background()
+        return self.draw_title()
+
+    def draw_background(self):
         from .app import app
-        center_x = app.window.width // 2
-        height = self.label_height * len(self.labels)
-        height += self.label_step_size * (len(self.labels) - 1)
-        if self.title_label:
-            height += self.title_step_size + self.title_label.content_height
-        height += self.border_size * 2
-        width = self.label_width
-        if self.title_label:
-            width = max(width, self.title_label.content_width)
-        width += self.border_size * 2
+        width, height = self.get_size()
         background_size_args = dict(
-            center_x=center_x, center_y=app.window.height // 2,
+            center_x=app.window.width // 2, center_y=app.window.height // 2,
             width=width, height=height)
         arcade.draw_rectangle_filled(color=arcade.color.WHITE, **background_size_args)
         arcade.draw_rectangle_outline(color=arcade.color.BLUE, **background_size_args)
+
+    def draw_title(self):
+        from .app import app
+        width, height = self.get_size()
+        center_x = app.window.width // 2
         y = (app.window.height - height) // 2
         y += self.border_size
         if self.title_label:
@@ -69,6 +73,55 @@ class Menu:
                 start_x=center_x - self.title_label.content_width // 2,
                 start_y=app.window.height - y - self.title_label.content_height // 2)
             y += self.title_label.content_height + self.title_step_size
+        return y
+
+    def do_action(self):
+        raise NotImplementedError
+
+    def switch_focus(self, relative=1):
+        pass
+
+    def on_text(self, text):
+        pass
+
+    def on_text_motion(self, motion):
+        pass
+
+
+class Menu(Window):
+    def __init__(self, actions, initial_selected_action_index=0, **kwargs):
+        """
+        :param list[(str,()->None)] actions:
+        :param int initial_selected_action_index:
+        """
+        super(Menu, self).__init__(**kwargs)
+        self.selected_action_index = initial_selected_action_index
+        self.actions = actions
+        self.labels = [
+            arcade.create_text(
+                act[0], color=arcade.color.BLACK, anchor_y="center", font_size=20)
+            for act in actions]
+        self.label_width = max([label.content_width for label in self.labels]) + 30
+        self.label_height = max([label.content_height for label in self.labels]) + 10
+        self.label_step_size = 5
+
+    def get_size(self):
+        height = 0
+        height += self.label_height * len(self.labels)
+        height += self.label_step_size * (len(self.labels) - 1)
+        if self.title_label:
+            height += self.title_step_size + self.title_label.content_height
+        height += self.border_size * 2
+        width = self.label_width
+        if self.title_label:
+            width = max(width, self.title_label.content_width)
+        width += self.border_size * 2
+        return width, height
+
+    def draw(self):
+        from .app import app
+        center_x = app.window.width // 2
+        y = super(Menu, self).draw()
         y += self.label_height // 2
         for i, label in enumerate(self.labels):
             focused = i == self.selected_action_index
@@ -94,9 +147,8 @@ class Menu:
 
 
 class ChoiceMenu(Menu):
-    def __init__(self, menu_stack, choices, title, initial_choice_idx=0):
+    def __init__(self, choices, title, initial_choice_idx=0, **kwargs):
         """
-        :param MenuStack menu_stack:
         :param list[(str, ()->None)] choices:
         :param str title:
         :param int initial_choice_idx:
@@ -107,7 +159,65 @@ class ChoiceMenu(Menu):
                 callback()
             return choice_callback
         super(ChoiceMenu, self).__init__(
-            menu_stack=menu_stack, title=title, initial_selected_action_index=initial_choice_idx,
+            title=title, initial_selected_action_index=initial_choice_idx,
             actions=[
                 (choice, make_choice_callback(callback))
-                for (choice, callback) in choices])
+                for (choice, callback) in choices],
+            **kwargs)
+
+
+class TextInput(Window):
+    """
+    See here:
+    https://github.com/adamlwgriffiths/Pyglet/blob/master/examples/text_input.py
+    """
+
+    def __init__(self, callback, **kwargs):
+        super(TextInput, self).__init__(**kwargs)
+        self.callback = callback
+
+        import pyglet
+        from .app import app
+
+        self.batch = pyglet.graphics.Batch()
+        self.text_width = app.window.width // 2
+
+        self.document = pyglet.text.document.UnformattedDocument("")
+        self.document.set_style(0, len(self.document.text),
+            dict(color=(0, 0, 0, 255))
+        )
+        font = self.document.get_font()
+        self.text_height = font.ascent - font.descent
+
+        self.layout = pyglet.text.layout.IncrementalTextLayout(
+            self.document, self.text_width, self.text_height, multiline=False, batch=self.batch)
+        self.caret = pyglet.text.caret.Caret(self.layout)
+
+        width, height = self.get_size()
+        self.layout.x = (app.window.width - width) // 2 + self.border_size
+        self.layout.y = app.window.height - ((app.window.height - height) // 2 + self.border_size)
+
+    def draw(self):
+        y = super(TextInput, self).draw()
+        self.batch.draw()
+
+    def do_action(self):
+        self.close()
+
+    def get_size(self):
+        height = 0
+        if self.title_label:
+            height += self.title_step_size + self.title_label.content_height
+        height += self.text_height
+        height += self.border_size * 2
+        width = self.text_width
+        if self.title_label:
+            width = max(width, self.title_label.content_width)
+        width += self.border_size * 2
+        return width, height
+
+    def on_text(self, text):
+        self.caret.on_text(text)
+
+    def on_text_motion(self, motion):
+        self.caret.on_text_motion(motion)

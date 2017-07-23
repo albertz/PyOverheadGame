@@ -5,7 +5,7 @@ import numpy
 import random
 from typing import Set, List, Dict, Optional
 from .data import DATA_DIR, GFX_DIR
-from .gui import Menu, MenuStack, ChoiceMenu
+from .gui import Menu, WindowStack, ChoiceMenu, TextInput
 
 
 GAME_DATA_DIR = DATA_DIR + "/game"
@@ -51,8 +51,8 @@ class Game:
         self.cur_room = self.world.get_room((0, 0))
         self.human_player = None  # type: Entity
         self.dt_computer = 0.0
-        self.menu_stack = MenuStack()
-        self.menu_stack.stack.append(MainMenu(game=self))
+        self.window_stack = WindowStack()
+        self.window_stack.stack.append(MainMenu(game=self))
         self.game_focus = GameFocusHumanPlayer
         self.game_text_gfx_label = None  # type: arcade.pyglet.text.Label
         self.info_text = ""
@@ -75,7 +75,7 @@ class Game:
 
     @property
     def menu_is_visible(self):
-        return self.menu_stack.is_visible()
+        return self.window_stack.is_visible()
 
     def load(self, filename):
         """
@@ -115,8 +115,8 @@ class Game:
         :param list[(str,()->None)] choices:
         :param int initial_choice_idx:
         """
-        self.menu_stack.stack.append(ChoiceMenu(
-            menu_stack=self.menu_stack, title=title, choices=choices, initial_choice_idx=initial_choice_idx))
+        self.window_stack.stack.append(ChoiceMenu(
+            window_stack=self.window_stack, title=title, choices=choices, initial_choice_idx=initial_choice_idx))
 
     def confirm_action(self, title, action):
         """
@@ -141,38 +141,46 @@ class Game:
             self.human_player.knapsack.draw_focus()
         self.human_player.knapsack.draw_selection(
             focused=self.game_focus == GameFocusKnapsack and not self.menu_is_visible)
-        self.menu_stack.draw()
+        self.window_stack.draw()
 
     def on_screen_resize(self):
         for room in self.world.rooms:
             room.on_screen_resize()
 
     def on_key_tab(self):
-        if self.menu_stack.is_visible():
-            self.menu_stack.stack[-1].switch_focus()
+        if self.window_stack.is_visible():
+            self.window_stack.switch_focus()
         else:
             self.change_game_focus()
 
     def on_key_return(self):
-        if self.menu_stack.is_visible():
-            self.menu_stack.stack[-1].do_action()
+        if self.window_stack.is_visible():
+            self.window_stack.do_action()
         else:
             self.use_knapsack_selection()
 
     def on_key_escape(self):
-        if not self.menu_stack.is_visible():
-            self.menu_stack.stack.append(MainMenu(game=self))
+        if not self.window_stack.is_visible():
+            self.window_stack.stack.append(MainMenu(game=self))
         else:
-            if isinstance(self.menu_stack.stack[-1], MainMenu):
-                del self.menu_stack.stack[-1]
+            if isinstance(self.window_stack.stack[-1], MainMenu):
+                del self.window_stack.stack[-1]
+
+    def on_text(self, text):
+        if self.window_stack.is_visible():
+            self.window_stack.on_text(text)
+
+    def on_text_motion(self, motion):
+        if self.window_stack.is_visible():
+            self.window_stack.on_text_motion(motion)
 
     def on_key_arrow(self, relative):
         """
         :param (int,int) relative: (x,y)
         """
         relative = numpy.array(relative)
-        if self.menu_stack.is_visible():
-            self.menu_stack.stack[-1].switch_focus(sum(relative))
+        if self.window_stack.is_visible():
+            self.window_stack.switch_focus(sum(relative))
         else:  # game
             if self.game_focus == GameFocusHumanPlayer:
                 self.human_player.move(relative)
@@ -220,12 +228,12 @@ class MainMenu(Menu):
         """
         :param Game game:
         """
-        super(MainMenu, self).__init__(menu_stack=game.menu_stack, title="PyOverheadGame!", actions=[
+        super(MainMenu, self).__init__(window_stack=game.window_stack, title="PyOverheadGame!", actions=[
             ("Play", self.close),
             ("Restart", lambda: game.confirm_action("Do you really want to restart?", game.restart)),
             ("Load", lambda: None),
             ("Save", lambda: None),
-            ("Debug", lambda: game.menu_stack.stack.append(DebugMenu(game=game))),
+            ("Debug", lambda: game.window_stack.stack.append(DebugMenu(game=game))),
             ("Exit", lambda: game.confirm_action("Do you really want to exit?", game.exit))
         ])
 
@@ -235,9 +243,13 @@ class DebugMenu(Menu):
         """
         :param Game game:
         """
-        super(DebugMenu, self).__init__(menu_stack=game.menu_stack, title="Debug", actions=[
+        super(DebugMenu, self).__init__(window_stack=game.window_stack, title="Debug", actions=[
             ("Close", self.close),
             ("Console print hello", lambda: print("Hello")),
+            ("Text input", lambda: game.window_stack.stack.append(
+                TextInput(
+                    title="Text input", window_stack=game.window_stack,
+                    callback=lambda s: None))),
             ("Profiler start", self.profile_start),
             ("Profiler stop", self.profile_stop)
         ])

@@ -87,12 +87,19 @@ class MainWindow(arcade.Window):
             app.game.on_key_escape()
 
     def on_key_release(self, key, modifiers):
-        """Called when the user releases a key. """
-
+        """
+        Called when the user releases a key.
+        """
         if key == arcade.key.UP or key == arcade.key.DOWN:
             pass
         elif key == arcade.key.LEFT or key == arcade.key.RIGHT:
             pass
+
+    def on_text(self, text):
+        app.game.on_text(text)
+
+    def on_text_motion(self, motion):
+        app.game.on_text_motion(motion)
 
 
 def main():
