@@ -109,14 +109,9 @@ class Game:
                 self.info_text_gfx_label,
                 start_x=p1[0] + self.game_text_gfx_label.content_width + 20, start_y=app.window.height - center[1])
 
-    def choices_menu(self, title, choices, initial_choice_idx=0):
-        """
-        :param str title:
-        :param list[(str,()->None)] choices:
-        :param int initial_choice_idx:
-        """
+    def choices_menu(self, **kwargs):
         self.window_stack.stack.append(ChoiceMenu(
-            window_stack=self.window_stack, title=title, choices=choices, initial_choice_idx=initial_choice_idx))
+            window_stack=self.window_stack, **kwargs))
 
     def confirm_action(self, title, action):
         """
@@ -124,7 +119,7 @@ class Game:
         :param ()->None action:
         """
         self.choices_menu(
-            title=title, initial_choice_idx=1, choices=[("Yes", action), ("No", lambda: None)])
+            title=title, initial_choice_idx=1, cancel_choice_idx=1, choices=[("Yes", action), ("No", lambda: None)])
 
     def set_info_text(self, info_txt):
         self.info_text = info_txt
@@ -163,8 +158,7 @@ class Game:
         if not self.window_stack.is_visible():
             self.window_stack.stack.append(MainMenu(game=self))
         else:
-            if isinstance(self.window_stack.stack[-1], MainMenu):
-                del self.window_stack.stack[-1]
+            self.window_stack.on_key_escape()
 
     def on_text(self, text):
         if self.window_stack.is_visible():

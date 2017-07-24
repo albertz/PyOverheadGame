@@ -20,6 +20,9 @@ class WindowStack:
     def do_action(self):
         self.stack[-1].do_action()
 
+    def on_key_escape(self):
+        self.stack[-1].on_key_escape()
+
     def on_text(self, text):
         self.stack[-1].on_text(text)
 
@@ -80,6 +83,9 @@ class Window:
 
     def switch_focus(self, relative=1):
         pass
+
+    def on_key_escape(self):
+        self.close()
 
     def on_text(self, text):
         pass
@@ -147,11 +153,12 @@ class Menu(Window):
 
 
 class ChoiceMenu(Menu):
-    def __init__(self, choices, title, initial_choice_idx=0, **kwargs):
+    def __init__(self, choices, title, initial_choice_idx=0, cancel_choice_idx=None, **kwargs):
         """
         :param list[(str, ()->None)] choices:
         :param str title:
         :param int initial_choice_idx:
+        :param int|None cancel_choice_idx:
         """
         def make_choice_callback(callback):
             def choice_callback():
@@ -164,6 +171,12 @@ class ChoiceMenu(Menu):
                 (choice, make_choice_callback(callback))
                 for (choice, callback) in choices],
             **kwargs)
+        self.cancel_choice_idx = cancel_choice_idx
+
+    def on_key_escape(self):
+        if self.cancel_choice_idx is None:
+            return
+        self.actions[self.cancel_choice_idx][1]()
 
 
 class Rectangle(object):
@@ -192,7 +205,7 @@ class TextInput(Window):
         from .app import app
 
         self.batch = pyglet.graphics.Batch()
-        self.text_width = app.window.width // 2
+        self.text_width = app.window.width // 3
 
         self.document = pyglet.text.document.UnformattedDocument("")
         self.document.set_style(0, len(self.document.text),
@@ -205,27 +218,35 @@ class TextInput(Window):
             self.document, self.text_width, self.text_height, multiline=False, batch=self.batch)
         self.caret = pyglet.text.caret.Caret(self.layout)
 
-        width, height = self.get_size()
-        self.layout.x = (app.window.width - width) // 2 + self.border_size
-        self.layout.y = -self.text_height
-
-        x = self.layout.x
-        y = self.layout.y
+        x = 0
+        y = 0
         pad = 2
         self.rectangle = Rectangle(
             x - pad, y - pad,
             x + self.text_width + pad, y + self.text_height + pad, self.batch)
 
-    def draw(self):
-        y = super(TextInput, self).draw()
+    def _draw_start_pos(self, x, y):
         from .app import app
         import pyglet
         pyglet.gl.glLoadIdentity()
-        pyglet.gl.glTranslatef(0, app.window.height - y, 0)
+        pyglet.gl.glTranslatef(x, app.window.height - y, 0)
+
+    def draw(self):
+        y = super(TextInput, self).draw()
+        from .app import app
+        width, height = self.get_size()
+        x = (app.window.width - width) // 2 + self.border_size
+        y += self.text_height
+        self._draw_start_pos(x, y)
         self.batch.draw()
 
     def do_action(self):
         self.close()
+        self.callback(self.document.text)
+
+    def on_key_escape(self):
+        self.close()
+        self.callback(None)
 
     def get_size(self):
         height = 0
