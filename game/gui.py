@@ -261,6 +261,8 @@ class TextInput(Window):
         return width, height
 
     def on_text(self, text):
+        if text in ("\n", "\r"):
+            return
         self.caret.on_text(text)
 
     def on_text_motion(self, motion):
