@@ -85,6 +85,7 @@ class Game:
         self.world.load(filename)
         self.human_player = self.world.find_human_player()
         self.human_player.knapsack.selected_place = self.human_player.knapsack.get_place((0, 0))
+        self.cur_room = self.human_player.room
 
     def get_text_placement(self):
         from .app import app
@@ -215,28 +216,60 @@ class Game:
             self.do_computer_interval()
 
 
-class MainMenu(Menu):
+class GameMenu(Menu):
+    def __init__(self, game, **kwargs):
+        """
+        :param Game game:
+        """
+        super(GameMenu, self).__init__(window_stack=game.window_stack, **kwargs)
+        self.game = game
+
+
+class MainMenu(GameMenu):
     def __init__(self, game):
         """
         :param Game game:
         """
-        super(MainMenu, self).__init__(window_stack=game.window_stack, title="PyOverheadGame!", actions=[
+        super(MainMenu, self).__init__(game=game, title="PyOverheadGame!", actions=[
             ("Play", self.close),
             ("Restart", lambda: game.confirm_action("Do you really want to restart?", game.restart)),
-            ("Load", lambda: None),
+            ("Load", lambda: LoadGameMenu(game=game).open()),
             ("Save", lambda: None),
             ("Debug", DebugMenu(game=game).open),
             ("Exit", lambda: game.confirm_action("Do you really want to exit?", game.exit))
         ])
-        self.game = game
 
 
-class DebugMenu(Menu):
+class LoadGameMenu(GameMenu):
     def __init__(self, game):
         """
         :param Game game:
         """
-        super(DebugMenu, self).__init__(window_stack=game.window_stack, title="Debug", actions=[
+        from glob import glob
+        import os
+        def make_load_action_tuple(f):
+            save_name = os.path.splitext(os.path.basename(f))[0]
+            return "Load '%s'" % save_name, lambda: self.load_game(f)
+        files = glob(GAME_DATA_DIR + "/*.spi")
+        load_actions = [make_load_action_tuple(f) for f in files]
+        super(LoadGameMenu, self).__init__(
+            game=game, title="Load game",
+            actions=load_actions + [("Close", self.close)])
+
+    def load_game(self, f):
+        """
+        :param str f:
+        """
+        self.game.load(f)
+        self.close()
+
+
+class DebugMenu(GameMenu):
+    def __init__(self, game):
+        """
+        :param Game game:
+        """
+        super(DebugMenu, self).__init__(game=game, title="Debug", actions=[
             ("Close", self.close),
             ("Console print hello", lambda: print("Hello")),
             ("Text input",
@@ -246,7 +279,6 @@ class DebugMenu(Menu):
             ("Profiler start", self.profile_start),
             ("Profiler stop", self.profile_stop)
         ])
-        self.game = game
 
     def profile_start(self):
         import yappi
@@ -331,7 +363,42 @@ class World:
         loaded_rooms_idxs = set()  # type: Set[int]
         cur_room_idx = None
         cur_place_idx = 0
-        for l in open("%s/%s" % (GAME_DATA_DIR, filename)).read().splitlines():
+        file_ext = filename.rsplit(".", 1)[-1].lower()
+        if "/" not in filename:
+            filename = "%s/%s" % (GAME_DATA_DIR, filename)
+        lines = open(filename).read().splitlines()
+        assert file_ext in ("sce", "spi")
+        # sce -> just the world rooms
+        # spi -> full game state
+        """
+        file content (for full game state):
+        [Room-Nr]
+        [Name]
+        [Scores]
+        [Life]
+        [Diamond status 1]
+        [Diamond status 2]
+        [Diamond status 3]
+        [Place under player]
+        :RUCK
+        bild1.bmp
+        ...
+        :RAUM1
+        bild1.bmp
+        bild2.bmp
+        ...
+        :RAUM2
+        ...
+        :RAUM20
+        ...
+        """
+        line_start_idx = 0
+        if file_ext == "spi":  # full game state:
+            assert lines[8] == ":RUCK"
+            line_start_idx = 9 + KNAPSACK_MAX + 1
+            assert lines[line_start_idx - 1] == "ENDE"
+        BackgroundPics = (BACKGROUND_PIC, SAVE_PIC, "")
+        for l in lines[line_start_idx:]:
             if cur_room_idx is None:
                 m = re.match(r":RAUM([0-9]+)", l)
                 assert m, "did not expect %r" % l
@@ -344,7 +411,7 @@ class World:
             name = Place.normalize_name(l)
             # We treat background just as nothing.
             # We also ignore the save mechanism and allow to save always via the menu.
-            if name not in (BACKGROUND_PIC, SAVE_PIC):
+            if name not in BackgroundPics:
                 entity = Entity(
                     room=self.rooms[cur_room_idx],
                     room_coord=self.rooms[cur_room_idx].idx_to_coord(cur_place_idx),
@@ -366,6 +433,27 @@ class World:
                 cur_place_idx = 0
         assert cur_room_idx is None, "last room incomplete"
         assert len(loaded_rooms_idxs) == WORLD_WIDTH * WORLD_HEIGHT, "some room is missing"
+        if file_ext == "spi":  # full game state
+            # no need for room number, neither the name
+            player = self.find_human_player()
+            player.scores = int(lines[2])
+            player.lives = int(lines[3])
+            # TODO: lines 4-6: diamonds...
+            place_under_player = Place.normalize_name(lines[7])
+            if place_under_player not in BackgroundPics:
+                assert player.place.entities == [player]
+                entity = Entity(
+                    room=player.room,
+                    room_coord=player.room_coord,
+                    name=place_under_player)
+                player.place.entities.insert(0, entity)
+            assert lines[8] == ":RUCK"
+            for idx, l in enumerate(lines[9:9 + KNAPSACK_MAX]):
+                room_coord = numpy.array([idx % KNAPSACK_WIDTH, idx // KNAPSACK_WIDTH])
+                name = Place.normalize_name(l)
+                if name not in BackgroundPics:
+                    entity = Entity(room=player.knapsack, room_coord=room_coord, name=name)
+                    player.knapsack.get_place(room_coord).set_entity(entity)
 
 
 class Room:
