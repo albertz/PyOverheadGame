@@ -45,6 +45,9 @@ class Window:
                 title, color=arcade.color.BLACK, anchor_y="center", font_size=20)
         self.title_step_size = self.border_size
 
+    def open(self):
+        self.window_stack.stack.append(self)
+
     def close(self):
         self.window_stack.stack.remove(self)
 

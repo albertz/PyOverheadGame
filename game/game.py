@@ -52,7 +52,7 @@ class Game:
         self.human_player = None  # type: Entity
         self.dt_computer = 0.0
         self.window_stack = WindowStack()
-        self.window_stack.stack.append(MainMenu(game=self))
+        MainMenu(game=self).open()
         self.game_focus = GameFocusHumanPlayer
         self.game_text_gfx_label = None  # type: arcade.pyglet.text.Label
         self.info_text = ""
@@ -114,9 +114,9 @@ class Game:
         :param str title:
         :param ()->None action:
         """
-        self.window_stack.stack.append(ConfirmActionMenu(
+        ConfirmActionMenu(
             window_stack=self.window_stack,
-            title=title, action=action))
+            title=title, action=action).open()
 
     def set_info_text(self, info_txt):
         self.info_text = info_txt
@@ -153,7 +153,7 @@ class Game:
 
     def on_key_escape(self):
         if not self.window_stack.is_visible():
-            self.window_stack.stack.append(MainMenu(game=self))
+            MainMenu(game=self).open()
         else:
             self.window_stack.on_key_escape()
 
@@ -224,7 +224,7 @@ class MainMenu(Menu):
             ("Restart", lambda: game.confirm_action("Do you really want to restart?", game.restart)),
             ("Load", lambda: None),
             ("Save", lambda: None),
-            ("Debug", lambda: game.window_stack.stack.append(DebugMenu(game=game))),
+            ("Debug", lambda: DebugMenu(game=game).open()),
             ("Exit", lambda: game.confirm_action("Do you really want to exit?", game.exit))
         ])
         self.game = game
@@ -238,10 +238,10 @@ class DebugMenu(Menu):
         super(DebugMenu, self).__init__(window_stack=game.window_stack, title="Debug", actions=[
             ("Close", self.close),
             ("Console print hello", lambda: print("Hello")),
-            ("Text input", lambda: game.window_stack.stack.append(
-                TextInput(
+            ("Text input",
+                lambda: TextInput(
                     title="Text input", window_stack=game.window_stack,
-                    callback=self.text_input))),
+                    callback=self.text_input).open()),
             ("Profiler start", self.profile_start),
             ("Profiler stop", self.profile_stop)
         ])
@@ -264,9 +264,9 @@ class DebugMenu(Menu):
         :param str|None s:
         """
         if s is None:
-            self.window_stack.stack.append(MessageBox("Text input was cancelled.", window_stack=self.window_stack))
+            MessageBox("Text input was cancelled.", window_stack=self.window_stack).open()
         else:
-            self.window_stack.stack.append(MessageBox("Text input: %r" % s, window_stack=self.window_stack))
+            MessageBox("Text input: %r" % s, window_stack=self.window_stack).open()
 
 
 class World:
