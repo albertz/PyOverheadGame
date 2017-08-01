@@ -36,7 +36,7 @@ class Window:
         :param WindowStack window_stack:
         :param str title:
         """
-        self.menu_stack = window_stack
+        self.window_stack = window_stack
         self.border_size = 20
         self.title = title
         self.title_label = None
@@ -46,7 +46,7 @@ class Window:
         self.title_step_size = self.border_size
 
     def close(self):
-        self.menu_stack.stack.remove(self)
+        self.window_stack.stack.remove(self)
 
     def get_size(self):
         raise NotImplementedError
@@ -177,6 +177,32 @@ class ChoiceMenu(Menu):
         if self.cancel_choice_idx is None:
             return
         self.actions[self.cancel_choice_idx][1]()
+
+
+class ConfirmActionMenu(ChoiceMenu):
+    def __init__(self, title, action, **kwargs):
+        """
+        :param str title:
+        :param ()->None action:
+        """
+        super(ConfirmActionMenu, self).__init__(
+            title=title,
+            initial_choice_idx=1, cancel_choice_idx=1,
+            choices=[("Yes", action), ("No", lambda: None)],
+            **kwargs)
+
+
+class MessageBox(ChoiceMenu):
+    def __init__(self, title, action=None, **kwargs):
+        """
+        :param str title:
+        :param (()->None)|None action:
+        """
+        super(MessageBox, self).__init__(
+            title=title,
+            initial_choice_idx=0, cancel_choice_idx=0,
+            choices=[("Ok", action or (lambda: None))],
+            **kwargs)
 
 
 class Rectangle(object):

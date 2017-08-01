@@ -5,7 +5,7 @@ import numpy
 import random
 from typing import Set, List, Dict, Optional
 from .data import DATA_DIR, GFX_DIR
-from .gui import Menu, WindowStack, ChoiceMenu, TextInput
+from .gui import Menu, WindowStack, ConfirmActionMenu, MessageBox, TextInput
 
 
 GAME_DATA_DIR = DATA_DIR + "/game"
@@ -109,17 +109,14 @@ class Game:
                 self.info_text_gfx_label,
                 start_x=p1[0] + self.game_text_gfx_label.content_width + 20, start_y=app.window.height - center[1])
 
-    def choices_menu(self, **kwargs):
-        self.window_stack.stack.append(ChoiceMenu(
-            window_stack=self.window_stack, **kwargs))
-
     def confirm_action(self, title, action):
         """
         :param str title:
         :param ()->None action:
         """
-        self.choices_menu(
-            title=title, initial_choice_idx=1, cancel_choice_idx=1, choices=[("Yes", action), ("No", lambda: None)])
+        self.window_stack.stack.append(ConfirmActionMenu(
+            window_stack=self.window_stack,
+            title=title, action=action))
 
     def set_info_text(self, info_txt):
         self.info_text = info_txt
@@ -230,6 +227,7 @@ class MainMenu(Menu):
             ("Debug", lambda: game.window_stack.stack.append(DebugMenu(game=game))),
             ("Exit", lambda: game.confirm_action("Do you really want to exit?", game.exit))
         ])
+        self.game = game
 
 
 class DebugMenu(Menu):
@@ -243,10 +241,11 @@ class DebugMenu(Menu):
             ("Text input", lambda: game.window_stack.stack.append(
                 TextInput(
                     title="Text input", window_stack=game.window_stack,
-                    callback=lambda s: None))),
+                    callback=self.text_input))),
             ("Profiler start", self.profile_start),
             ("Profiler stop", self.profile_stop)
         ])
+        self.game = game
 
     def profile_start(self):
         import yappi
@@ -259,6 +258,15 @@ class DebugMenu(Menu):
                    2: ("tsub", 8), 3: ("ttot", 8), 4: ("tavg", 8)}
         yappi.get_func_stats().print_all(columns=columns)
         yappi.get_thread_stats().print_all()
+
+    def text_input(self, s):
+        """
+        :param str|None s:
+        """
+        if s is None:
+            self.window_stack.stack.append(MessageBox("Text input was cancelled.", window_stack=self.window_stack))
+        else:
+            self.window_stack.stack.append(MessageBox("Text input: %r" % s, window_stack=self.window_stack))
 
 
 class World:
