@@ -52,7 +52,8 @@ class Game:
         self.human_player = None  # type: Entity
         self.dt_computer = 0.0
         self.window_stack = WindowStack()
-        MainMenu(game=self).open()
+        self.main_menu = MainMenu(game=self)
+        self.main_menu.open()
         self.game_focus = GameFocusHumanPlayer
         self.game_text_gfx_label = None  # type: arcade.pyglet.text.Label
         self.info_text = ""
@@ -153,7 +154,7 @@ class Game:
 
     def on_key_escape(self):
         if not self.window_stack.is_visible():
-            MainMenu(game=self).open()
+            self.main_menu.open()
         else:
             self.window_stack.on_key_escape()
 
@@ -224,7 +225,7 @@ class MainMenu(Menu):
             ("Restart", lambda: game.confirm_action("Do you really want to restart?", game.restart)),
             ("Load", lambda: None),
             ("Save", lambda: None),
-            ("Debug", lambda: DebugMenu(game=game).open()),
+            ("Debug", DebugMenu(game=game).open),
             ("Exit", lambda: game.confirm_action("Do you really want to exit?", game.exit))
         ])
         self.game = game
@@ -239,9 +240,9 @@ class DebugMenu(Menu):
             ("Close", self.close),
             ("Console print hello", lambda: print("Hello")),
             ("Text input",
-                lambda: TextInput(
+                TextInput(
                     title="Text input", window_stack=game.window_stack,
-                    callback=self.text_input).open()),
+                    callback=self.text_input).open),
             ("Profiler start", self.profile_start),
             ("Profiler stop", self.profile_stop)
         ])
