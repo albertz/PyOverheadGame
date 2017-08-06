@@ -39,12 +39,16 @@ class App:
 class MainWindow(arcade.Window):
     """ Main application class. """
 
+    KeyRepeatDelayTime = 0.2
+    KeyRepeatTime = 0.05
+
     def __init__(self):
         self.room_pixel_size = 30
         width = self.room_pixel_size * (game.ROOM_WIDTH + 1 + game.KNAPSACK_WIDTH)
         height = self.room_pixel_size * (game.ROOM_HEIGHT + 1)
         super(MainWindow, self).__init__(
             width=width, height=height, title="PyOverheadGame!")
+        self.key_downs = {}  # key int idx -> delta time
 
     def on_draw(self):
         """
@@ -66,6 +70,12 @@ class MainWindow(arcade.Window):
         :param float delta_time: how much time passed
         """
         app.game.update(delta_time=delta_time)
+        for key, t in sorted(self.key_downs.items()):
+            t += delta_time
+            while t > self.KeyRepeatDelayTime:
+                t -= self.KeyRepeatTime
+                self.on_key_press(key=key, modifiers=0)
+            self.key_downs[key] = t
 
     def on_key_press(self, key, modifiers):
         """
@@ -85,15 +95,13 @@ class MainWindow(arcade.Window):
             app.game.on_key_return()
         elif key == arcade.key.ESCAPE:
             app.game.on_key_escape()
+        self.key_downs.setdefault(key, 0.0)
 
     def on_key_release(self, key, modifiers):
         """
         Called when the user releases a key.
         """
-        if key == arcade.key.UP or key == arcade.key.DOWN:
-            pass
-        elif key == arcade.key.LEFT or key == arcade.key.RIGHT:
-            pass
+        del self.key_downs[key]
 
     def on_text(self, text):
         app.game.on_text(text)
