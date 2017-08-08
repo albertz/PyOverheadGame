@@ -1,14 +1,16 @@
 
 import arcade
+import os
 import re
 import numpy
 import random
 from typing import Set, List, Dict, Optional
-from .data import DATA_DIR, GFX_DIR
+from .data import DATA_DIR, GFX_DIR, UserDataDir
 from .gui import Menu, WindowStack, ConfirmActionMenu, MessageBox, TextInput
 
 
 GAME_DATA_DIR = DATA_DIR + "/game"
+GameDataDirs = (UserDataDir + "/game", GAME_DATA_DIR)
 
 PICTURE_SIZE = 30
 BACKGROUND_PIC = 'hinter'
@@ -46,6 +48,8 @@ NumberGameFocus = 2
 
 
 class Game:
+    Compatibility1999 = True
+
     def __init__(self):
         self.world = World(game=self)
         self.cur_room = self.world.get_room((0, 0))
@@ -86,6 +90,9 @@ class Game:
         self.human_player = self.world.find_human_player()
         self.human_player.knapsack.selected_place = self.human_player.knapsack.get_place((0, 0))
         self.cur_room = self.human_player.room
+
+    def save(self, filename):
+        self.world.save(filename)
 
     def get_text_placement(self):
         from .app import app
@@ -234,7 +241,7 @@ class MainMenu(GameMenu):
             ("Play", self.close),
             ("Restart", lambda: game.confirm_action("Do you really want to restart?", game.restart)),
             ("Load", lambda: LoadGameMenu(game=game).open()),
-            ("Save", lambda: None),
+            ("Save", SaveGameMenu(game=game).open),
             ("Debug", DebugMenu(game=game).open),
             ("Exit", lambda: game.confirm_action("Do you really want to exit?", game.exit))
         ])
@@ -250,7 +257,9 @@ class LoadGameMenu(GameMenu):
         def make_load_action_tuple(f):
             save_name = os.path.splitext(os.path.basename(f))[0]
             return "Load '%s'" % save_name, lambda: self.load_game(f)
-        files = glob(GAME_DATA_DIR + "/*.spi")
+        files = []
+        for d in GameDataDirs:
+            files += glob(d + "/*.spi")
         load_actions = [make_load_action_tuple(f) for f in files]
         super(LoadGameMenu, self).__init__(
             game=game, title="Load game",
@@ -260,8 +269,41 @@ class LoadGameMenu(GameMenu):
         """
         :param str f:
         """
+        print("load %r" % f)
         self.game.load(f)
         self.close()
+        MessageBox(
+            title="Game %r loaded." % os.path.splitext(os.path.basename(f))[0],
+            window_stack=self.window_stack).open()
+
+
+class SaveGameMenu(TextInput):
+    def __init__(self, game):
+        """
+        :param Game game:
+        """
+        super(SaveGameMenu, self).__init__(
+            window_stack=game.window_stack, title="Save game under name:",
+            callback=self.save_game)
+        self.game = game
+
+    def save_game(self, f):
+        """
+        :param str|None f:
+        """
+        if f is None:
+            return
+        for c in ":\n\t/\\":
+            f = f.replace(c, "")
+        f = f.strip()
+        if not f:
+            MessageBox(title="Please enter a valid name.", window_stack=self.window_stack).open()
+            return
+        f += ".spi"
+        f = get_unique_game_file(f)
+        print("save %r" % f)
+        self.game.save(f)
+        MessageBox(title="Game saved as %r." % os.path.splitext(f)[0], window_stack=self.window_stack).open()
 
 
 class DebugMenu(GameMenu):
@@ -365,7 +407,7 @@ class World:
         cur_place_idx = 0
         file_ext = filename.rsplit(".", 1)[-1].lower()
         if "/" not in filename:
-            filename = "%s/%s" % (GAME_DATA_DIR, filename)
+            filename = find_game_file(filename)
         lines = open(filename).read().splitlines()
         assert file_ext in ("sce", "spi")
         # sce -> just the world rooms
@@ -454,6 +496,55 @@ class World:
                 if name not in BackgroundPics:
                     entity = Entity(room=player.knapsack, room_coord=room_coord, name=name)
                     player.knapsack.get_place(room_coord).set_entity(entity)
+
+    def save(self, filename):
+        """
+        :param str filename:
+        """
+        assert "/" not in filename
+        name, file_ext = filename.rsplit(".", 1)
+        assert file_ext in ("sce", "spi")
+        assert "\n" not in name
+        # sce -> just the world rooms
+        # spi -> full game state
+        filename = GameDataDirs[0] + "/" + filename
+        assert not os.path.exists(filename)
+        if not os.path.exists(os.path.dirname(filename)):
+            os.makedirs(os.path.dirname(filename))
+        with open(filename, "w") as f:
+            # see self.load()
+            if file_ext == "spi":
+                player = self.find_human_player()
+                f.write("%i\n" % self.game.cur_room.idx)  # room-nr
+                f.write("%s\n" % name)  # name
+                f.write("%i\n" % player.scores)  # scores
+                f.write("%i\n" % player.lives)  # lives
+                f.write("\n" * 3)  # TODO: diamond states...
+                if len(player.place.entities) >= 2:
+                    assert len(player.place.entities) == 2
+                    f.write("%s.bmp\n" % player.place.entities[0].name)  # place under player
+                else:
+                    assert len(player.place.entities) == 1
+                    f.write("\n")  # place under player (nothing)
+                f.write(":RUCK\n")
+                assert len(player.knapsack.places) == KNAPSACK_MAX
+                for place_idx, place in enumerate(player.knapsack.places):
+                    if place.entities:
+                        assert len(place.entities) == 1
+                        f.write("%s.bmp\n" % place.entities[-1].name)
+                    else:
+                        f.write("\n")
+                f.write("ENDE\n")
+            assert len(self.rooms) == WORLD_WIDTH * WORLD_HEIGHT
+            for room_idx, room in enumerate(self.rooms):
+                f.write(":RAUM%i\n" % (room_idx + 1))
+                assert len(room.places) == ROOM_WIDTH * ROOM_HEIGHT
+                for place_idx, place in enumerate(room.places):
+                    if place.entities:
+                        f.write("%s.bmp\n" % place.entities[-1].name)
+                    else:
+                        f.write("%s.bmp\n" % BACKGROUND_PIC)
+            f.close()
 
 
 class Room:
@@ -827,6 +918,13 @@ def is_allowed_together(entities):
     """
     if len(entities) <= 1:
         return True
+    game = entities[0].room.world.game
+    if game.Compatibility1999:
+        # This is only for game-state compatibility with older versions,
+        # and with the saved games format.
+        if PLAYER_PIC not in entities:
+            # There cannot be more than one entity at a time, except it is the player.
+            return False
     entity_names_map = {}  # type: Dict[str,List[Entity]]
     for entity in entities:
         entity_names_map.setdefault(entity.name, [])
@@ -974,3 +1072,39 @@ def do_item_action(player, item):
         player.lives += 1
         player.room.world.game.set_info_text("You got an extra live.")
         item.kill()
+
+
+def find_game_file(filename, assert_exists=True):
+    """
+    :param str filename: e.g. "game.sce"
+    :param bool assert_exists:
+    :return: full filename, e.g. GAME_DATA_DIR + "/game.sce"
+    :rtype: str|None
+    """
+    for d in GameDataDirs:
+        full_fn = "%s/%s" % (d, filename)
+        if os.path.exists(full_fn):
+            return full_fn
+    if assert_exists:
+        raise Exception("Did not found game file: %s" % filename)
+    return None
+
+
+def get_unique_game_file(filename):
+    """
+    :param str filename: eg. "game.spi"
+    :return: filename which does not exists in GameDataDirs, e.g. "game.spi" or "game_1.spi" or so
+    :rtype: str
+    """
+    assert "/" not in filename
+    base, file_ext = os.path.splitext(filename)
+    count = 0
+    while True:
+        if not count:
+            postfix = ""
+        else:
+            postfix = "_%i" % count
+        name = base + postfix + file_ext
+        if not find_game_file(name, assert_exists=False):
+            return name
+        count += 1

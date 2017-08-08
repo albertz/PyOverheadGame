@@ -41,6 +41,7 @@ class MainWindow(arcade.Window):
 
     KeyRepeatDelayTime = 0.2
     KeyRepeatTime = 0.05
+    KeyRepeatIgnoreKeys = (arcade.key.RETURN,)  # can lead to unexpected behavior
 
     def __init__(self):
         self.room_pixel_size = 30
@@ -95,13 +96,14 @@ class MainWindow(arcade.Window):
             app.game.on_key_return()
         elif key == arcade.key.ESCAPE:
             app.game.on_key_escape()
-        self.key_downs.setdefault(key, 0.0)
+        if key not in self.KeyRepeatIgnoreKeys:
+            self.key_downs.setdefault(key, 0.0)
 
     def on_key_release(self, key, modifiers):
         """
         Called when the user releases a key.
         """
-        del self.key_downs[key]
+        self.key_downs.pop(key, None)
 
     def on_text(self, text):
         app.game.on_text(text)
