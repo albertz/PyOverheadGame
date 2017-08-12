@@ -26,6 +26,7 @@ GET_LIVE_PIC = "leben"
 BURN_PIC = "aetz"
 SAVE_PIC = "speicher"
 BURNABLE_PICS = ["wand1"]
+ELECTRIC_WALL = "wand3"
 COLLECTABLE_PICS = [SAVE_PIC, BURN_PIC, GET_LIVE_PIC] + KEY_PICS + DIAMOND_PICS
 ERROR_PIC = 'error'  # used for error-displaying
 
@@ -918,13 +919,21 @@ def is_allowed_together(entities):
     """
     if len(entities) <= 1:
         return True
+    robots = [entity for entity in entities if entity.name in ROBOT_PICS]
+    if len(robots) > 1:
+        return False
     game = entities[0].room.world.game
     if game.Compatibility1999:
         # This is only for game-state compatibility with older versions,
         # and with the saved games format.
-        if PLAYER_PIC not in entities:
-            # There cannot be more than one entity at a time, except it is the player.
-            return False
+        if robots:
+            remaining = [e for e in entities if e.name not in ROBOT_PICS]
+            # Now remove all which are allowed together with robots.
+            # The only reason they are not allowed is because we couldn't save such a state.
+            remaining = [e for e in remaining if e.name != PLAYER_PIC]
+            remaining = [e for e in remaining if e.name != ELECTRIC_WALL]
+            if remaining:  # Still any which are not allowed together?
+                return False
     entity_names_map = {}  # type: Dict[str,List[Entity]]
     for entity in entities:
         entity_names_map.setdefault(entity.name, [])
@@ -952,9 +961,6 @@ def is_allowed_together(entities):
             if not entity.knapsack.have_entity_name(door_key):
                 return False
         return True
-    robots = [entity for entity in entities if entity.name in PLAYER_PICS and entity.name != PLAYER_PIC]
-    if len(robots) > 1:
-        return False
     return True
 
 
@@ -964,17 +970,17 @@ def on_joined_together(entities):
     """
     if len(entities) <= 1:
         return
-    electro_walls = [entity for entity in entities if entity.name == "wand3"]
+    electric_walls = [entity for entity in entities if entity.name == ELECTRIC_WALL]
     players = [entity for entity in entities if entity.name in PLAYER_PICS]
-    while players and electro_walls:
+    while players and electric_walls:
         for player in players:
-            if not electro_walls:
+            if not electric_walls:
                 break
-            electro_wall = electro_walls[0]
+            electro_wall = electric_walls[0]
             electro_wall.kill()
             player.kill()
             if not electro_wall.is_alive:
-                electro_walls.remove(electro_wall)
+                electric_walls.remove(electro_wall)
             if not player.is_alive:
                 players.remove(player)
     human_players = [entity for entity in players if entity.name == PLAYER_PIC]
