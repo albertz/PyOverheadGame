@@ -70,14 +70,13 @@ class Game:
         self.info_text_gfx_label = None  # type: arcade.pyglet.text.Label
         self.set_info_text("Welcome")
         self.recheck_finished_game = False
+        self.game_selected = "robot.sce"
 
     def init(self):
-        self.load("robot.sce")
+        self.load(self.game_selected)
 
     def restart(self):
         self.init()
-        self.cur_room = self.world.get_room((0, 0))
-        self.dt_computer = 0.0
         self.set_info_text("Game restarted")
 
     def exit(self):
@@ -97,6 +96,7 @@ class Game:
         self.human_player = self.world.find_human_player()
         self.human_player.knapsack.selected_place = self.human_player.knapsack.get_place((0, 0))
         self.cur_room = self.human_player.room
+        self.dt_computer = 0.0
 
     def save(self, filename):
         self.world.save(filename)
@@ -257,6 +257,7 @@ class MainMenu(GameMenu):
         super(MainMenu, self).__init__(game=game, title="PyOverheadGame!", actions=[
             ("Play", self.close),
             ("Restart", lambda: game.confirm_action("Do you really want to restart?", game.restart)),
+            ("Switch game", SelectGameMenu(game=game).open),
             ("Load", lambda: LoadGameMenu(game=game).open()),
             ("Save", SaveGameMenu(game=game).open),
             ("Debug", DebugMenu(game=game).open),
@@ -286,11 +287,42 @@ class LoadGameMenu(GameMenu):
         """
         :param str f:
         """
-        print("load %r" % f)
+        print("load saved game %r" % f)
         self.game.load(f)
         self.close()
         MessageBox(
             title="Game %r loaded." % os.path.splitext(os.path.basename(f))[0],
+            window_stack=self.window_stack).open()
+
+
+class SelectGameMenu(GameMenu):
+    def __init__(self, game):
+        """
+        :param Game game:
+        """
+        from glob import glob
+        import os
+        def make_load_action_tuple(f):
+            save_name = os.path.splitext(os.path.basename(f))[0]
+            return "Game '%s'" % save_name, lambda: self.load_game(f)
+        files = []
+        for d in GameDataDirs:
+            files += glob(d + "/*.sce")
+        load_actions = [make_load_action_tuple(f) for f in files]
+        super(SelectGameMenu, self).__init__(
+            game=game, title="Select game",
+            actions=load_actions + [("Close", self.close)])
+
+    def load_game(self, f):
+        """
+        :param str f:
+        """
+        print("select game %r" % f)
+        self.game.game_selected = f
+        self.game.load(f)
+        self.close()
+        MessageBox(
+            title="Welcome to the %s game." % os.path.splitext(os.path.basename(f))[0],
             window_stack=self.window_stack).open()
 
 
@@ -498,7 +530,9 @@ class World:
         BackgroundPics = (BACKGROUND_PIC, SAVE_PIC, "")
         for l in lines[line_start_idx:]:
             if cur_room_idx is None:
-                m = re.match(r":RAUM([0-9]+)", l)
+                if not l:
+                    continue
+                m = re.match(r":RAUM([0-9]+)", l, flags=re.IGNORECASE)
                 assert m, "did not expect %r" % l
                 cur_room_idx = int(m.groups()[0]) - 1
                 assert 0 <= cur_room_idx < WORLD_WIDTH * WORLD_HEIGHT
