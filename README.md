@@ -14,3 +14,9 @@ which you need to destroy indirectly.
 
 The game is mostly for educational purpose
 for simple Python 3 code with the [Python Arcade library](https://pythonhosted.org/arcade/).
+
+![Main menu](screenshots/main-menu-start.png?raw=true "Main menu")
+
+![Game beginning](screenshots/game-beginning.png?raw=true "Game beginning")
+
+![Game intermediate](screenshots/game-intermediate.png?raw=true "Game intermediate")
