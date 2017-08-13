@@ -27,8 +27,11 @@ GET_LIVE_PIC = "leben"
 BURN_PIC = "aetz"
 SAVE_PIC = "speicher"
 KILL_PIC = "kill"
-BURNABLE_PICS = ["wand1"]
-ELECTRIC_WALL = "wand3"
+SOFT_WALL_PIC = "wand1"
+HARD_WALL_PIC = "wand2"
+ELECTRIC_WALL_PIC = "wand3"
+WALL_PICS = [SOFT_WALL_PIC, HARD_WALL_PIC, ELECTRIC_WALL_PIC]
+BURNABLE_PICS = [SOFT_WALL_PIC]
 COLLECTABLE_PICS = [SAVE_PIC, BURN_PIC, GET_LIVE_PIC] + KEY_PICS + DIAMOND_PICS
 ERROR_PIC = 'error'  # used for error-displaying
 
@@ -66,6 +69,7 @@ class Game:
         self.info_text = ""
         self.info_text_gfx_label = None  # type: arcade.pyglet.text.Label
         self.set_info_text("Welcome")
+        self.recheck_finished_game = False
 
     def init(self):
         self.load("robot.sce")
@@ -227,6 +231,13 @@ class Game:
         if self.dt_computer >= COMPUTER_CONTROL_INTERVAL:
             self.dt_computer -= COMPUTER_CONTROL_INTERVAL
             self.do_computer_interval()
+        if self.recheck_finished_game:
+            if not self.world.find_king():
+                self.world.finish_game()
+                MessageBox(
+                    title="Congratulations! The king is defeated. You finished the game.",
+                    window_stack=self.window_stack).open()
+            self.recheck_finished_game = False
 
 
 class GameMenu(Menu):
@@ -357,6 +368,11 @@ class World:
         """
         self.game = game
         self.rooms = [Room(world=self, idx=i) for i in range(WORLD_WIDTH * WORLD_HEIGHT)]
+        self.diamonds_activated = [False] * len(DIAMOND_PICS)
+
+    def _reset_diamonds(self):
+        for i in range(len(DIAMOND_PICS)):
+            self.diamonds_activated[i] = False
 
     @staticmethod
     def valid_coord(coord):
@@ -404,10 +420,44 @@ class World:
                 if player.name == PLAYER_PIC:
                     return player
 
+    def find_king(self):
+        for room in self.rooms:
+            for player in room.players:
+                if player.name == KING_PIC:
+                    return player
+        return None
+
+    def set_king_vulnerable(self):
+        for room in self.rooms:
+            for player in room.players:
+                if player.name == KING_PIC:
+                    player.lives = 0
+
+    def finish_game(self):
+        for room in self.rooms:
+            for player in room.players:
+                if player.name in ROBOT_PICS:
+                    player.lives = 0
+                    player.kill()
+            for place in room.places:
+                removed = False
+                for entity in list(place.entities):
+                    if entity.name in WALL_PICS + DOOR_PICS:
+                        entity.kill()
+                        removed = True
+                if removed and place.is_free():
+                    place.set_entity(Entity(
+                        room=room,
+                        room_coord=place.coord,
+                        name=random.choice(SCORES_PICS)))
+
     def load(self, filename):
         """
         :param str filename:
         """
+        # We only need to reset diamond states.
+        # The entities of each room will be reset via set_entity().
+        self._reset_diamonds()
         loaded_rooms_idxs = set()  # type: Set[int]
         cur_room_idx = None
         cur_place_idx = 0
@@ -481,11 +531,13 @@ class World:
         assert cur_room_idx is None, "last room incomplete"
         assert len(loaded_rooms_idxs) == WORLD_WIDTH * WORLD_HEIGHT, "some room is missing"
         if file_ext == "spi":  # full game state
-            # no need for room number, neither the name
+            # no need for room number, neither the name (line 0 and 1)
             player = self.find_human_player()
             player.scores = int(lines[2])
             player.lives = int(lines[3])
-            # TODO: lines 4-6: diamonds...
+            assert len(DIAMOND_PICS) == len(self.diamonds_activated) == 3
+            for i in range(3):
+                self.diamonds_activated[i] = bool(int(lines[4 + i]))
             place_under_player = Place.normalize_name(lines[7])
             if place_under_player not in BackgroundPics:
                 assert player.place.entities == [player]
@@ -501,6 +553,8 @@ class World:
                 if name not in BackgroundPics:
                     entity = Entity(room=player.knapsack, room_coord=room_coord, name=name)
                     player.knapsack.get_place(room_coord).set_entity(entity)
+        if all(self.diamonds_activated):
+            self.set_king_vulnerable()
 
     def save(self, filename):
         """
@@ -524,7 +578,9 @@ class World:
                 f.write("%s\n" % name)  # name
                 f.write("%i\n" % player.scores)  # scores
                 f.write("%i\n" % player.lives)  # lives
-                f.write("\n" * 3)  # TODO: diamond states...
+                assert len(DIAMOND_PICS) == len(self.diamonds_activated) == 3
+                for i in range(3):
+                    f.write("%i\n" % int(self.diamonds_activated[i]))
                 if len(player.place.entities) >= 2:
                     assert len(player.place.entities) == 2
                     f.write("%s.bmp\n" % player.place.entities[0].name)  # place under player
@@ -568,7 +624,7 @@ class Room:
         self.height = height
         self.places = [Place(room=self, idx=i) for i in range(width * height)]
         self.selected_place = None  # type: Place
-        self.players = []  # type: List[Entity]
+        self.players = []  # type: List[Entity]  # king + robots + human
         self.entities_sprite_list = arcade.SpriteList()
 
     def __repr__(self):
@@ -825,6 +881,45 @@ class Place:
     def on_add_entity(self):
         on_joined_together(self.entities)
 
+    def is_at_room_border(self):
+        if self.x in (0, self.room.width - 1):
+            return True
+        if self.y in (0, self.room.height - 1):
+            return True
+        return False
+
+    def nearby_places(self, allow_room_borders=False):
+        """
+        :param bool allow_room_borders:
+        :return: list of places in this room
+        :rtype: list[Place]
+        """
+        places = []
+        room_borders = [[0, self.room.width - 1], [0, self.room.height - 1]]
+        if not allow_room_borders:
+            for b in room_borders:
+                b[0] += 1
+                b[1] -= 1
+        for rel in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            coord = self.coord + numpy.array(rel)
+            if coord[0] < room_borders[0][0] or coord[0] > room_borders[0][1]:
+                continue
+            if coord[1] < room_borders[1][0] or coord[1] > room_borders[1][1]:
+                continue
+            places.append(self.room.get_place(coord))
+        return places
+
+    def nearby_entities(self, include_room_borders=False):
+        """
+        :param bool include_room_borders:
+        :return: list of entities
+        :rtype: list[Entity]
+        """
+        entities = []
+        for place in self.nearby_places(allow_room_borders=include_room_borders):
+            entities.extend(reversed(place.entities))
+        return entities
+
 
 class Entity:
     def __init__(self, room, room_coord, name):
@@ -917,6 +1012,11 @@ class Entity:
             return
         if self is self.room.world.game.human_player:
             self.room.world.game.set_info_text("Very sad, you are dead.")
+        if self.name == KING_PIC:
+            self.room.world.game.set_info_text("The king is dead!")
+            self.room.world.game.recheck_finished_game = True
+        if self.name in PLAYER_PICS:
+            self.room.players.remove(self)
         self.place.remove_entity(self)
         self.is_alive = False
 
@@ -940,7 +1040,7 @@ def is_allowed_together(entities):
             # Now remove all which are allowed together with robots.
             # The only reason they are not allowed is because we couldn't save such a state.
             remaining = [e for e in remaining if e.name != PLAYER_PIC]
-            remaining = [e for e in remaining if e.name != ELECTRIC_WALL]
+            remaining = [e for e in remaining if e.name != ELECTRIC_WALL_PIC]
             if remaining:  # Still any which are not allowed together?
                 return False
     entity_names_map = {}  # type: Dict[str,List[Entity]]
@@ -979,7 +1079,7 @@ def on_joined_together(entities):
     """
     if len(entities) <= 1:
         return
-    electric_walls = [entity for entity in entities if entity.name == ELECTRIC_WALL]
+    electric_walls = [entity for entity in entities if entity.name == ELECTRIC_WALL_PIC]
     players = [entity for entity in entities if entity.name in PLAYER_PICS]
     while players and electric_walls:
         for player in players:
@@ -1065,28 +1165,44 @@ def do_item_action(player, item):
     :param Entity player:
     :param Entity item:
     """
-    room = player.room
+    print("%r do item %r action" % (player, item))
     if item.name == BURN_PIC:
         count = 0
-        for rel in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            coord = player.room_coord + numpy.array(rel)
-            if coord[0] <= 0 or coord[0] >= room.width - 1:  # including borders
-                continue
-            if coord[1] <= 0 or coord[1] >= room.height - 1:  # including borders
-                continue
-            place = room.get_place(coord)
-            for entity in list(reversed(place.entities)):
-                if entity.name in BURNABLE_PICS:
-                    entity.kill()
-                    count += 1
+        for entity in player.place.nearby_entities(include_room_borders=False):
+            if entity.name in BURNABLE_PICS:
+                entity.kill()
+                count += 1
         if count > 0:
             item.kill()
         else:
             player.room.world.game.set_info_text("Cannot burn anything here.")
-    if item.name == GET_LIVE_PIC:
+    elif item.name == GET_LIVE_PIC:
         player.lives += 1
         player.room.world.game.set_info_text("You got an extra live.")
         item.kill()
+    elif item.name in KEY_PICS:
+        player.room.world.game.set_info_text("A key has no action. But you can go through doors.")
+    elif item.name in DIAMOND_PICS:
+        count = 0
+        diamond_idx = DIAMOND_PICS.index(item.name)
+        for entity in player.place.nearby_entities(include_room_borders=True):
+            if entity.name == CODE_PICS[diamond_idx]:
+                count += 1
+                entity.kill()
+                item.kill()
+                player.room.world.diamonds_activated[diamond_idx] = True
+                break
+        if count:
+            rem = len(player.room.world.diamonds_activated) - sum(player.room.world.diamonds_activated)
+            if rem > 0:
+                player.room.world.game.set_info_text("%i diamonds remaining." % rem)
+            else:
+                player.room.world.game.set_info_text("You finished it. The king is vulnerable.")
+                player.room.world.set_king_vulnerable()
+        else:
+            player.room.world.game.set_info_text("The diamond can not be used here.")
+    else:
+        print("no action implemented for item %r" % item.name)
 
 
 def find_game_file(filename, assert_exists=True):
