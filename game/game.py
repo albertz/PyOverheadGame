@@ -276,7 +276,7 @@ class LoadGameMenu(GameMenu):
             save_name = os.path.splitext(os.path.basename(f))[0]
             return "Load '%s'" % save_name, lambda: self.load_game(f)
         files = []
-        for d in GameDataDirs:
+        for d in GameDataDirs[:1]:
             files += glob(d + "/*.spi")
         load_actions = [make_load_action_tuple(f) for f in files]
         super(LoadGameMenu, self).__init__(
