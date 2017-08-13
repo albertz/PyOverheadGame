@@ -15,7 +15,8 @@ GameDataDirs = (UserDataDir + "/game", GAME_DATA_DIR)
 PICTURE_SIZE = 30
 BACKGROUND_PIC = 'hinter'
 PLAYER_PIC = "figur"
-ROBOT_PICS = ["konig"] + ['robot%i' % i for i in range(1, 10)]
+KING_PIC = "konig"
+ROBOT_PICS = [KING_PIC] + ['robot%i' % i for i in range(1, 10)]
 PLAYER_PICS = [PLAYER_PIC] + ROBOT_PICS
 KEY_PICS = ["schl%i" % i for i in range(1, 10)]
 DOOR_PICS = ["tuer%i" % i for i in range(1, 10)]
@@ -25,6 +26,7 @@ SCORES_PICS = ["punkt%i" % i for i in range(1, 6)]
 GET_LIVE_PIC = "leben"
 BURN_PIC = "aetz"
 SAVE_PIC = "speicher"
+KILL_PIC = "kill"
 BURNABLE_PICS = ["wand1"]
 ELECTRIC_WALL = "wand3"
 COLLECTABLE_PICS = [SAVE_PIC, BURN_PIC, GET_LIVE_PIC] + KEY_PICS + DIAMOND_PICS
@@ -209,6 +211,9 @@ class Game:
     def do_computer_interval(self):
         for player in self.cur_room.find_robots():
             do_robot_action(robot=player, human=self.human_player)
+            if player.name == KING_PIC:
+                # The king does two actions at once.
+                do_robot_action(robot=player, human=self.human_player)
 
     def update(self, delta_time):
         """
@@ -463,7 +468,6 @@ class World:
                 entity = None
             if name in PLAYER_PICS:
                 if name == PLAYER_PIC:
-                    entity.lives = 3
                     entity.knapsack = Room(
                         world=self,
                         width=KNAPSACK_WIDTH, height=KNAPSACK_HEIGHT,
@@ -834,7 +838,12 @@ class Entity:
         self.name = name
         self.knapsack = None  # type: Optional[Room]
         self.scores = 0
-        self.lives = 0
+        if name == PLAYER_PIC:
+            self.lives = 3
+        elif name == KING_PIC:
+            self.lives = float("inf")
+        else:
+            self.lives = 0
         self.is_alive = True
         self.sprite = None  # type: arcade.Sprite
         self.reset_sprite()
@@ -990,9 +999,9 @@ def on_joined_together(entities):
         robot = robots[0]
         robot.kill()
         human.kill()
-        if not robot.is_alive:
+        if not robot.is_alive or robot.lives == float("inf"):
             robots.remove(robot)
-        if not human.is_alive:
+        if not human.is_alive or human.lives == float("inf"):
             human_players.remove(human)
     points = [entity for entity in entities if entity.name in SCORES_PICS]
     while human_players and points:
@@ -1017,7 +1026,7 @@ def on_joined_together(entities):
                 continue
             item = collectable.pop(0)
             item.move_to_place(place)
-    kill_switches = [entity for entity in entities if entity.name == "kill"]
+    kill_switches = [entity for entity in entities if entity.name == KILL_PIC]
     if human_players and kill_switches:
         for kill in kill_switches:
             for robot in kill.room.find_entities(ROBOT_PICS):
