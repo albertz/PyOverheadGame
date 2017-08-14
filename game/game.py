@@ -1201,7 +1201,7 @@ def do_item_action(player, item):
     :param Entity player:
     :param Entity item:
     """
-    print("%r do item %r action" % (player, item))
+    print("%r do item %r action" % (player.name, item.name))
     if item.name == BURN_PIC:
         count = 0
         for entity in player.place.nearby_entities(include_room_borders=False):
