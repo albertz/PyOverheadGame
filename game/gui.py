@@ -30,6 +30,16 @@ class WindowStack:
     def on_text_motion(self, motion):
         self.stack[-1].on_text_motion(motion)
 
+    def on_mouse_motion(self, x, y):
+        if not self.stack:
+            return
+        self.stack[-1].on_mouse_motion(x, y)
+
+    def on_mouse_press(self, x, y, button):
+        if not self.stack:
+            return
+        self.stack[-1].on_mouse_press(x, y, button)
+
 
 class Window:
     def __init__(self, window_stack, title=None):
@@ -97,6 +107,12 @@ class Window:
     def on_text_motion(self, motion):
         pass
 
+    def on_mouse_motion(self, x, y):
+        pass
+
+    def on_mouse_press(self, x, y, button):
+        pass
+
 
 class Menu(Window):
     def __init__(self, actions, initial_selected_action_index=0, **kwargs):
@@ -111,6 +127,7 @@ class Menu(Window):
             arcade.create_text(
                 act[0], color=arcade.color.BLACK, anchor_y="center", font_size=20)
             for act in actions]
+        self.label_location_map = {}
         self.label_width = max([label.content_width for label in self.labels]) + 30
         self.label_height = max([label.content_height for label in self.labels]) + 10
         self.label_step_size = 5
@@ -129,12 +146,14 @@ class Menu(Window):
         return width, height
 
     def draw(self):
+        self.label_location_map.clear()
         from .app import app
         center_x = app.window.width // 2
         y = super(Menu, self).draw()
         y += self.label_height // 2
         for i, label in enumerate(self.labels):
             focused = i == self.selected_action_index
+            self.label_location_map[(center_x, y)] = i
             arcade.draw_rectangle_filled(
                 color=arcade.color.BABY_BLUE if focused else arcade.color.BLUE_GRAY,
                 center_x=center_x, center_y=app.window.height - y,
@@ -154,6 +173,23 @@ class Menu(Window):
 
     def do_action(self):
         self.actions[self.selected_action_index][1]()
+
+    def _find_label_for_location(self, x, y):
+        for (label_x, label_y), i in self.label_location_map.items():
+            if abs(label_x - x) < self.label_width // 2 and abs(label_y - y) < self.label_height // 2:
+                return i
+        return None
+
+    def on_mouse_motion(self, x, y):
+        idx = self._find_label_for_location(x, y)
+        if idx is not None:
+            self.selected_action_index = idx
+
+    def on_mouse_press(self, x, y, button):
+        idx = self._find_label_for_location(x, y)
+        if button == 1 and idx is not None:
+            self.selected_action_index = idx
+            self.do_action()
 
 
 class ChoiceMenu(Menu):
