@@ -311,8 +311,12 @@ Goal of the game: In some of the rooms, there is a king, which has to be defeate
 The king is immortal unless you collected and activated all the diamonds at the corresponding spots.<br>
 <br>
 <img src='{game.PLAYER_PIC}.png' width={s} height={s}>, this is you.
+You can collect certain items to your knapsack, which is shown to the right.
+Press <font color='blue'>TAB</font> to switch to the knapsack and select some item.
+Press <font color='blue'>RETURN</font> to activate some item.
+<br>
 <img src='{game.ROBOT_PICS[1]}.png' width={s} height={s}> is a robot which wants to kill you.
-But you are lucky that he is kind of stupid.
+But you are lucky that it is kind of stupid.
 <img src='{game.KING_PIC}.png' width={s} height={s}>, this is the king.
 <br>
 Anything which runs into the electric wall <img src='{game.ELECTRIC_WALL_PIC}.png' width={s} height={s}> will die.
@@ -351,7 +355,7 @@ def create_html_text(
     """
     if width is None:
         from .app import app
-        width = (app.window.width * 2) // 3
+        width = (app.window.width * 4) // 5
     if len(color) == 3:
         color = (color[0], color[1], color[2], 255)
 
