@@ -1,7 +1,9 @@
 
 import arcade
+import pyglet.image
 from . import game
 from .game import Game
+from .data import GFX_DIR
 
 
 app = None  # type: App
@@ -50,6 +52,7 @@ class MainWindow(arcade.Window):
         super(MainWindow, self).__init__(
             width=width, height=height, title="PyOverheadGame!")
         self.key_downs = {}  # key int idx -> delta time
+        self.set_icon(pyglet.image.load("%s/robot.png" % GFX_DIR))
 
     def on_draw(self):
         """
