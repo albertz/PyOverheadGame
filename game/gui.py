@@ -1,5 +1,6 @@
 
 import arcade
+from arcade import Color
 from typing import List
 
 
@@ -41,7 +42,7 @@ class Window:
         self.title = title
         self.title_label = None
         if title:
-            self.title_label = arcade.create_text(
+            self.title_label = create_html_text(
                 title, color=arcade.color.BLACK, anchor_y="center", font_size=20)
         self.title_step_size = self.border_size
 
@@ -296,3 +297,85 @@ class TextInput(Window):
 
     def on_text_motion(self, motion):
         self.caret.on_text_motion(motion)
+
+
+class HelpMenu(MessageBox):
+    def __init__(self, **kwargs):
+        from . import game
+        from .app import app
+        s = app.window.entity_pixel_size
+        super(HelpMenu, self).__init__(
+            title=f"""
+<font size=3>
+Goal of the game: In some of the rooms, there is a king, which has to be defeated.
+The king is immortal unless you collected and activated all the diamonds at the corresponding spots.<br>
+<br>
+<img src='{game.PLAYER_PIC}.png' width={s} height={s}>, this is you.
+<img src='{game.ROBOT_PICS[1]}.png' width={s} height={s}> is a robot which wants to kill you.
+But you are lucky that he is kind of stupid.
+<img src='{game.KING_PIC}.png' width={s} height={s}>, this is the king.
+<br>
+Anything which runs into the electric wall <img src='{game.ELECTRIC_WALL_PIC}.png' width={s} height={s}> will die.
+<br>
+Collect the keys <img src='{game.KEY_PICS[2]}.png' width={s} height={s}> to be able to pass the doors
+<img src='{game.DOOR_PICS[2]}.png' width={s} height={s}>.
+Doors at the edge are closed when there are still robots alive in the room.
+<br>
+Collect the chemical <img src='{game.BURN_PIC}.png' width={s} height={s}> and activate nearby
+a normal wall <img src='{game.SOFT_WALL_PIC}.png' width={s} height={s}> to burn it away.
+<br>
+If you get to the kill switch <img src='{game.KILL_PIC}.png' width={s} height={s}>,
+all robots in the room will get killed immediately.
+<br>
+The elixir <img src='{game.GET_LIVE_PIC}.png' width={s} height={s}> can be used to give you an additional life.
+Collect the diamonds <img src='{game.DIAMOND_PICS[0]}.png' width={s} height={s}> and activate nearby the
+corresponding spot <img src='{game.CODE_PICS[0]}.png' width={s} height={s}>.
+</font>
+            """,
+            **kwargs)
+
+
+def create_html_text(
+        text: str,
+        color: Color,
+        width: int=None,
+        anchor_x="left",
+        anchor_y="baseline",
+        font_size: float = 12,
+        font_name=('Calibri', 'Arial'),
+        bold: bool = False,
+        italic: bool = False):
+    """
+    Create text to be rendered later. This operation takes a while, so it is
+    better to hold it between frames when the text does not change.
+    """
+    if width is None:
+        from .app import app
+        width = (app.window.width * 2) // 3
+    if len(color) == 3:
+        color = (color[0], color[1], color[2], 255)
+
+    from pyglet.text.formats.html import HTMLDecoder
+    html_font_sizes = HTMLDecoder.font_sizes
+    html_font_size = min([(abs(v - font_size), k) for (k, v) in sorted(html_font_sizes.items())])[1]
+
+    text = "<font face='%s' size=%r color=%s>%s</font>" % (
+        ",".join(font_name), html_font_size, "#%02x%02x%02x" % (color[0], color[1], color[2]), text)
+    if bold:
+        text = "<b>%s</b>" % text
+    if italic:
+        text = "<it>%s</it>" % text
+
+    from pyglet.resource import FileLocation
+    from pyglet.text import HTMLLabel
+    from .data import GFX_DIR
+    label = HTMLLabel(
+        text,
+        location=FileLocation(GFX_DIR),
+        x=0, y=0,
+        multiline=True,
+        width=width,
+        anchor_x=anchor_x,
+        anchor_y=anchor_y)
+
+    return label

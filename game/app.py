@@ -44,9 +44,9 @@ class MainWindow(arcade.Window):
     KeyRepeatIgnoreKeys = (arcade.key.RETURN,)  # can lead to unexpected behavior
 
     def __init__(self):
-        self.room_pixel_size = 30
-        width = self.room_pixel_size * (game.ROOM_WIDTH + 1 + game.KNAPSACK_WIDTH)
-        height = self.room_pixel_size * (game.ROOM_HEIGHT + 1)
+        self.entity_pixel_size = 30
+        width = self.entity_pixel_size * (game.ROOM_WIDTH + 1 + game.KNAPSACK_WIDTH)
+        height = self.entity_pixel_size * (game.ROOM_HEIGHT + 1)
         super(MainWindow, self).__init__(
             width=width, height=height, title="PyOverheadGame!")
         self.key_downs = {}  # key int idx -> delta time

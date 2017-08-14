@@ -6,13 +6,12 @@ import numpy
 import random
 from typing import Set, List, Dict, Optional
 from .data import DATA_DIR, GFX_DIR, UserDataDir
-from .gui import Menu, WindowStack, ConfirmActionMenu, MessageBox, TextInput
+from .gui import Menu, WindowStack, ConfirmActionMenu, MessageBox, TextInput, HelpMenu
 
 
 GAME_DATA_DIR = DATA_DIR + "/game"
 GameDataDirs = (UserDataDir + "/game", GAME_DATA_DIR)
 
-PICTURE_SIZE = 30
 BACKGROUND_PIC = 'hinter'
 PLAYER_PIC = "figur"
 KING_PIC = "konig"
@@ -103,10 +102,10 @@ class Game:
 
     def get_text_placement(self):
         from .app import app
-        y0 = ROOM_HEIGHT * app.window.room_pixel_size
-        y1 = (ROOM_HEIGHT + 1) * app.window.room_pixel_size
+        y0 = ROOM_HEIGHT * app.window.entity_pixel_size
+        y1 = (ROOM_HEIGHT + 1) * app.window.entity_pixel_size
         x0 = 0
-        x1 = ROOM_WIDTH * app.window.room_pixel_size
+        x1 = ROOM_WIDTH * app.window.entity_pixel_size
         return numpy.array((x0, y0)), numpy.array((x1, y1))
 
     def draw_text(self):
@@ -256,6 +255,7 @@ class MainMenu(GameMenu):
         """
         super(MainMenu, self).__init__(game=game, title="PyOverheadGame!", actions=[
             ("Play", self.close),
+            ("Help", lambda: HelpMenu(window_stack=game.window_stack).open()),
             ("Restart", lambda: game.confirm_action("Do you really want to restart?", game.restart)),
             ("Switch game", SelectGameMenu(game=game).open),
             ("Load", lambda: LoadGameMenu(game=game).open()),
@@ -372,10 +372,12 @@ class DebugMenu(GameMenu):
         ])
 
     def profile_start(self):
+        # noinspection PyUnresolvedReferences,PyPackageRequirements
         import yappi
         yappi.start()
 
     def profile_stop(self):
+        # noinspection PyUnresolvedReferences,PyPackageRequirements
         import yappi
         yappi.stop()
         columns = {0: ("name", 36), 1: ("ncall", 7),
@@ -728,8 +730,8 @@ class Room:
         """
         from .app import app
         size = numpy.array((self.width, self.height))
-        screen_size = size * app.window.room_pixel_size
-        pos = self.screen_offset * app.window.room_pixel_size
+        screen_size = size * app.window.entity_pixel_size
+        pos = self.screen_offset * app.window.entity_pixel_size
         return pos, pos + screen_size
 
     def draw(self):
@@ -747,8 +749,8 @@ class Room:
         if not self.selected_place:
             return
         from .app import app
-        p1 = (self.screen_offset + self.selected_place.coord) * app.window.room_pixel_size
-        size = numpy.array((app.window.room_pixel_size, app.window.room_pixel_size))
+        p1 = (self.screen_offset + self.selected_place.coord) * app.window.entity_pixel_size
+        size = numpy.array((app.window.entity_pixel_size, app.window.entity_pixel_size))
         p2 = p1 + size
         center = (p1 + p2) // 2
         arcade.draw_rectangle_outline(
@@ -991,15 +993,15 @@ class Entity:
     def update_sprite_pos(self):
         from .app import app
         self.sprite.left = self.sprite.width * self.room_coord[0] + \
-                           self.room.screen_offset[0] * app.window.room_pixel_size
+                           self.room.screen_offset[0] * app.window.entity_pixel_size
         self.sprite.top = app.window.height - (
             self.sprite.height * self.room_coord[1] +
-            self.room.screen_offset[1] * app.window.room_pixel_size)
+            self.room.screen_offset[1] * app.window.entity_pixel_size)
 
     def reset_sprite(self):
         from .app import app
         texture = arcade.load_texture(file_name="%s/%s.png" % (GFX_DIR, self.name))
-        scale = app.window.room_pixel_size / texture.width
+        scale = app.window.entity_pixel_size / texture.width
         self.sprite = arcade.Sprite(scale=scale)
         self.sprite.append_texture(texture)
         self.sprite.set_texture(0)
