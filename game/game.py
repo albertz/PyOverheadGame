@@ -1,6 +1,7 @@
 
 import arcade
 import os
+import sys
 import re
 import numpy
 import random
@@ -362,28 +363,34 @@ class DebugMenu(GameMenu):
         """
         super(DebugMenu, self).__init__(game=game, title="Debug", actions=[
             ("Close", self.close),
-            ("Console print hello", lambda: print("Hello")),
-            ("Text input",
-                TextInput(
-                    title="Text input", window_stack=game.window_stack,
-                    callback=self.text_input).open),
+            #("Console print hello", lambda: print("Hello")),
+            #("Text input",
+            #    TextInput(
+            #        title="Text input", window_stack=game.window_stack,
+            #        callback=self.text_input).open),
             ("Profiler start", self.profile_start),
             ("Profiler stop", self.profile_stop)
         ])
 
     def profile_start(self):
-        # noinspection PyUnresolvedReferences,PyPackageRequirements
-        import yappi
-        yappi.start()
+        try:
+            # noinspection PyUnresolvedReferences,PyPackageRequirements
+            import yappi
+            yappi.start()
+        except Exception:
+            sys.excepthook(*sys.exc_info())
 
     def profile_stop(self):
-        # noinspection PyUnresolvedReferences,PyPackageRequirements
-        import yappi
-        yappi.stop()
-        columns = {0: ("name", 36), 1: ("ncall", 7),
-                   2: ("tsub", 8), 3: ("ttot", 8), 4: ("tavg", 8)}
-        yappi.get_func_stats().print_all(columns=columns)
-        yappi.get_thread_stats().print_all()
+        try:
+            # noinspection PyUnresolvedReferences,PyPackageRequirements
+            import yappi
+            yappi.stop()
+            columns = {0: ("name", 36), 1: ("ncall", 7),
+                       2: ("tsub", 8), 3: ("ttot", 8), 4: ("tavg", 8)}
+            yappi.get_func_stats().print_all(columns=columns)
+            yappi.get_thread_stats().print_all()
+        except Exception:
+            sys.excepthook(*sys.exc_info())
 
     def text_input(self, s):
         """
