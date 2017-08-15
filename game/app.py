@@ -115,10 +115,10 @@ class MainWindow(arcade.Window):
         app.game.on_text_motion(motion)
 
     def on_mouse_motion(self, x: float, y: float, dx: float, dy: float):
-        app.game.window_stack.on_mouse_motion(x, self.height - y)
+        app.game.on_mouse_motion(x, self.height - y)
 
     def on_mouse_press(self, x: float, y: float, button: int, modifiers: int):
-        app.game.window_stack.on_mouse_press(x, self.height - y, button)
+        app.game.on_mouse_press(x, self.height - y, button)
 
 
 def main():

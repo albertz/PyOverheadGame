@@ -195,6 +195,16 @@ class Game:
             elif self.game_focus == GameFocusKnapsack:
                 self.human_player.knapsack.move_selection(relative)
 
+    def on_mouse_motion(self, x, y):
+        if self.window_stack.is_visible():
+            self.window_stack.on_mouse_motion(x, y)
+
+    def on_mouse_press(self, x, y, button):
+        if self.window_stack.is_visible():
+            self.window_stack.on_mouse_press(x, y, button)
+        else:
+            self.main_menu.open()
+
     def change_game_focus(self):
         self.game_focus += 1
         self.game_focus %= NumberGameFocus
@@ -256,11 +266,10 @@ class MainMenu(GameMenu):
         """
         super(MainMenu, self).__init__(game=game, title="PyOverheadGame!", actions=[
             ("Play", self.close),
-            ("Help", lambda: HelpMenu(window_stack=game.window_stack).open()),
-            ("Restart", lambda: game.confirm_action("Do you really want to restart?", game.restart)),
-            ("Switch game", SelectGameMenu(game=game).open),
             ("Load", lambda: LoadGameMenu(game=game).open()),
             ("Save", SaveGameMenu(game=game).open),
+            ("Switch or restart game", SelectGameMenu(game=game).open),
+            ("Help / how to play", lambda: HelpMenu(window_stack=game.window_stack).open()),
             ("Debug", DebugMenu(game=game).open),
             ("Exit", lambda: game.confirm_action("Do you really want to exit?", game.exit))
         ])

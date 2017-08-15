@@ -31,13 +31,9 @@ class WindowStack:
         self.stack[-1].on_text_motion(motion)
 
     def on_mouse_motion(self, x, y):
-        if not self.stack:
-            return
         self.stack[-1].on_mouse_motion(x, y)
 
     def on_mouse_press(self, x, y, button):
-        if not self.stack:
-            return
         self.stack[-1].on_mouse_press(x, y, button)
 
 
