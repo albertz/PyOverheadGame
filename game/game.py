@@ -65,6 +65,7 @@ class Game:
         self.main_menu = MainMenu(game=self)
         self.main_menu.open()
         self.game_focus = GameFocusHumanPlayer
+        self.edit_mode = False
         self.game_text_gfx_label = None  # type: arcade.pyglet.text.Label
         self.info_text = ""
         self.info_text_gfx_label = None  # type: arcade.pyglet.text.Label
@@ -89,7 +90,11 @@ class Game:
         return self.window_stack.is_visible()
 
     def switch_edit_mode(self):
-        pass
+        self.edit_mode = not self.edit_mode
+        if not self.edit_mode:
+            self.human_player = self.world.find_human_player()
+            if self.human_player:
+                self.cur_room = self.human_player.room
 
     def load_empty(self):
         self.world.load_empty()
@@ -127,7 +132,9 @@ class Game:
         p1, p2 = self.get_text_placement()
         center = (p1 + p2) // 2
         arcade.draw_rectangle_filled(color=arcade.color.WHITE, **app.get_screen_pos_args((p1, p2)))
-        if self.human_player:
+        if self.edit_mode:
+            txt = "-- Edit mode -- Room %r" % (tuple(self.cur_room.world_coord),)
+        elif self.human_player:
             txt = "Score: %i, lives: %i" % (self.human_player.scores, self.human_player.lives)
         else:
             txt = "No player"
@@ -175,13 +182,13 @@ class Game:
     def on_key_tab(self):
         if self.window_stack.is_visible():
             self.window_stack.switch_focus()
-        else:
+        elif not self.edit_mode:
             self.change_game_focus()
 
     def on_key_return(self):
         if self.window_stack.is_visible():
             self.window_stack.do_action()
-        else:
+        elif not self.edit_mode:
             self.use_knapsack_selection()
 
     def on_key_escape(self):
@@ -205,6 +212,13 @@ class Game:
         relative = numpy.array(relative)
         if self.window_stack.is_visible():
             self.window_stack.switch_focus(sum(relative))
+        elif self.edit_mode:
+            if self.game_focus == GameFocusHumanPlayer:
+                world_size = numpy.array((WORLD_WIDTH, WORLD_HEIGHT))
+                new_room_coord = (self.cur_room.world_coord + relative) % world_size
+                self.cur_room = self.world.get_room(new_room_coord)
+            elif self.game_focus == GameFocusKnapsack:
+                self.human_player.knapsack.move_selection(relative)
         else:  # game
             if self.human_player:
                 if self.game_focus == GameFocusHumanPlayer:
@@ -220,8 +234,6 @@ class Game:
     def on_mouse_press(self, x, y, button):
         if self.window_stack.is_visible():
             self.window_stack.on_mouse_press(x, y, button)
-        else:
-            self.main_menu.open()
 
     def change_game_focus(self):
         self.game_focus += 1
@@ -254,6 +266,8 @@ class Game:
         :param float delta_time: how much time passed
         """
         if self.menu_is_visible:
+            return
+        if self.edit_mode:
             return
         self.dt_computer += delta_time
         if self.dt_computer >= COMPUTER_CONTROL_INTERVAL:
