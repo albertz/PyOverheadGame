@@ -92,9 +92,18 @@ class Game:
     def switch_edit_mode(self):
         self.edit_mode = not self.edit_mode
         if not self.edit_mode:
+            self.cur_room.selected_place = None
             self.human_player = self.world.find_human_player()
             if self.human_player:
                 self.cur_room = self.human_player.room
+
+    def select_place_by_pixel_coord(self, x, y):
+        from .app import app
+        coord = (x // app.window.entity_pixel_size, y // app.window.entity_pixel_size)
+        if self.cur_room.valid_coord(coord):
+            self.cur_room.selected_place = self.cur_room.get_place(coord)
+        else:
+            self.cur_room.selected_place = None
 
     def load_empty(self):
         self.world.load_empty()
@@ -167,6 +176,9 @@ class Game:
         self.cur_room.draw()
         if not self.menu_is_visible and self.game_focus == GameFocusHumanPlayer:
             self.cur_room.draw_focus()
+        if self.cur_room.selected_place:
+            self.cur_room.draw_selection(
+                focused=not self.menu_is_visible)
         if self.human_player:
             self.human_player.knapsack.draw()
             if not self.menu_is_visible and self.game_focus == GameFocusKnapsack:
@@ -230,6 +242,8 @@ class Game:
     def on_mouse_motion(self, x, y):
         if self.window_stack.is_visible():
             self.window_stack.on_mouse_motion(x, y)
+        elif self.edit_mode:
+            self.select_place_by_pixel_coord(x, y)
 
     def on_mouse_press(self, x, y, button):
         if self.window_stack.is_visible():
