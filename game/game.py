@@ -33,6 +33,8 @@ ELECTRIC_WALL_PIC = "wand3"
 WALL_PICS = [SOFT_WALL_PIC, HARD_WALL_PIC, ELECTRIC_WALL_PIC]
 BURNABLE_PICS = [SOFT_WALL_PIC]
 COLLECTABLE_PICS = [SAVE_PIC, BURN_PIC, GET_LIVE_PIC] + KEY_PICS + DIAMOND_PICS
+ALL_PICS = PLAYER_PICS + KEY_PICS + DOOR_PICS + DIAMOND_PICS + CODE_PICS + SCORES_PICS + \
+    [GET_LIVE_PIC, BURN_PIC, KILL_PIC] + WALL_PICS
 ERROR_PIC = 'error'  # used for error-displaying
 
 # room count
@@ -45,6 +47,8 @@ ROOM_HEIGHT = 20
 KNAPSACK_WIDTH = 3
 KNAPSACK_HEIGHT = 9
 KNAPSACK_MAX = 27  # compatibility with Robot1 (9*3)
+EDIT_ITEMS_WIDTH = 3
+EDIT_ITEMS_HEIGHT = 20
 
 COMPUTER_CONTROL_INTERVAL = 0.75  # timer-interval for computer player control
 
@@ -66,6 +70,7 @@ class Game:
         self.main_menu.open()
         self.game_focus = GameFocusHumanPlayer
         self.edit_mode = False
+        self.edit_items = self._load_edit_items()
         self.game_text_gfx_label = None  # type: arcade.pyglet.text.Label
         self.info_text = ""
         self.info_text_gfx_label = None  # type: arcade.pyglet.text.Label
@@ -99,11 +104,27 @@ class Game:
 
     def select_place_by_pixel_coord(self, x, y):
         from .app import app
-        coord = (x // app.window.entity_pixel_size, y // app.window.entity_pixel_size)
+        coord = numpy.array((x, y)) // app.window.entity_pixel_size
         if self.cur_room.valid_coord(coord):
             self.cur_room.selected_place = self.cur_room.get_place(coord)
         else:
             self.cur_room.selected_place = None
+        if self.edit_items.valid_coord(coord - self.edit_items.screen_offset):
+            self.edit_items.selected_place = self.edit_items.get_place(coord - self.edit_items.screen_offset)
+
+    def _load_edit_items(self):
+        edit_items = Room(
+            world=self.world,
+            width=EDIT_ITEMS_WIDTH, height=EDIT_ITEMS_HEIGHT,
+            screen_offset=(ROOM_WIDTH + 1, 0))
+        edit_items.selected_place = edit_items.get_place((0, 0))
+        for i, item in enumerate(ALL_PICS):
+            entity = Entity(
+                room=edit_items,
+                room_coord=edit_items.idx_to_coord(i),
+                name=item)
+            edit_items.places[i].set_entity(entity)
+        return edit_items
 
     def load_empty(self):
         self.world.load_empty()
@@ -179,12 +200,18 @@ class Game:
         if self.cur_room.selected_place:
             self.cur_room.draw_selection(
                 focused=not self.menu_is_visible)
-        if self.human_player:
+        if self.edit_mode:
+            self.edit_items.draw()
+            is_focused = self.game_focus == GameFocusKnapsack and not self.menu_is_visible
+            if is_focused:
+                self.edit_items.draw_focus()
+            self.edit_items.draw_selection(focused=is_focused)
+        elif self.human_player:
             self.human_player.knapsack.draw()
-            if not self.menu_is_visible and self.game_focus == GameFocusKnapsack:
+            is_focused = self.game_focus == GameFocusKnapsack and not self.menu_is_visible
+            if is_focused:
                 self.human_player.knapsack.draw_focus()
-            self.human_player.knapsack.draw_selection(
-                focused=self.game_focus == GameFocusKnapsack and not self.menu_is_visible)
+            self.human_player.knapsack.draw_selection(focused=is_focused)
         self.window_stack.draw()
 
     def on_screen_resize(self):
@@ -194,7 +221,7 @@ class Game:
     def on_key_tab(self):
         if self.window_stack.is_visible():
             self.window_stack.switch_focus()
-        elif not self.edit_mode:
+        else:
             self.change_game_focus()
 
     def on_key_return(self):
@@ -230,7 +257,7 @@ class Game:
                 new_room_coord = (self.cur_room.world_coord + relative) % world_size
                 self.cur_room = self.world.get_room(new_room_coord)
             elif self.game_focus == GameFocusKnapsack:
-                self.human_player.knapsack.move_selection(relative)
+                self.edit_items.move_selection(relative)
         else:  # game
             if self.human_player:
                 if self.game_focus == GameFocusHumanPlayer:
