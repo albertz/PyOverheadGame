@@ -102,15 +102,19 @@ class Game:
             if self.human_player:
                 self.cur_room = self.human_player.room
 
-    def select_place_by_pixel_coord(self, x, y):
+    def select_place_by_pixel_coord(self, room, x, y):
+        """
+        :param Room room:
+        :param int x:
+        :param int y:
+        :rtype: Place|None
+        """
         from .app import app
         coord = numpy.array((x, y)) // app.window.entity_pixel_size
-        if self.cur_room.valid_coord(coord):
-            self.cur_room.selected_place = self.cur_room.get_place(coord)
-        else:
-            self.cur_room.selected_place = None
-        if self.edit_items.valid_coord(coord - self.edit_items.screen_offset):
-            self.edit_items.selected_place = self.edit_items.get_place(coord - self.edit_items.screen_offset)
+        if room.valid_coord(coord - room.screen_offset):
+            room.selected_place = self.cur_room.get_place(coord - room.screen_offset)
+            return room.selected_place
+        return None
 
     def _load_edit_items(self):
         edit_items = Room(
@@ -270,11 +274,22 @@ class Game:
         if self.window_stack.is_visible():
             self.window_stack.on_mouse_motion(x, y)
         elif self.edit_mode:
-            self.select_place_by_pixel_coord(x, y)
+            self.select_place_by_pixel_coord(self.cur_room, x, y)
 
     def on_mouse_press(self, x, y, button):
         if self.window_stack.is_visible():
             self.window_stack.on_mouse_press(x, y, button)
+        elif self.edit_mode:
+            if self.select_place_by_pixel_coord(self.cur_room, x, y):
+                if self.edit_items.selected_place.entities:
+                    entity = Entity(
+                        room=self.cur_room,
+                        room_coord=self.cur_room.selected_place.coord,
+                        name=self.edit_items.selected_place.entities[-1].name)
+                    self.cur_room.selected_place.set_entity(entity)
+            else:
+                self.cur_room.selected_place = None
+                self.select_place_by_pixel_coord(self.edit_items, x, y)
 
     def change_game_focus(self):
         self.game_focus += 1
