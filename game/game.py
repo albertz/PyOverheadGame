@@ -88,14 +88,27 @@ class Game:
     def menu_is_visible(self):
         return self.window_stack.is_visible()
 
+    def switch_edit_mode(self):
+        pass
+
+    def load_empty(self):
+        self.world.load_empty()
+        self._load_post_init()
+
     def load(self, filename):
         """
         :param str filename:
         """
         self.world.load(filename)
+        self._load_post_init()
+
+    def _load_post_init(self):
         self.human_player = self.world.find_human_player()
-        self.human_player.knapsack.selected_place = self.human_player.knapsack.get_place((0, 0))
-        self.cur_room = self.human_player.room
+        if self.human_player:
+            self.human_player.knapsack.selected_place = self.human_player.knapsack.get_place((0, 0))
+            self.cur_room = self.human_player.room
+        else:
+            self.cur_room = self.world.rooms[0]
         self.dt_computer = 0.0
 
     def save(self, filename):
@@ -114,7 +127,10 @@ class Game:
         p1, p2 = self.get_text_placement()
         center = (p1 + p2) // 2
         arcade.draw_rectangle_filled(color=arcade.color.WHITE, **app.get_screen_pos_args((p1, p2)))
-        txt = "Score: %i, lives: %i" % (self.human_player.scores, self.human_player.lives)
+        if self.human_player:
+            txt = "Score: %i, lives: %i" % (self.human_player.scores, self.human_player.lives)
+        else:
+            txt = "No player"
         if not self.game_text_gfx_label or self.game_text_gfx_label.text != txt:
             self.game_text_gfx_label = arcade.create_text(txt, color=arcade.color.BLACK, anchor_y="center")
         arcade.render_text(
@@ -144,11 +160,12 @@ class Game:
         self.cur_room.draw()
         if not self.menu_is_visible and self.game_focus == GameFocusHumanPlayer:
             self.cur_room.draw_focus()
-        self.human_player.knapsack.draw()
-        if not self.menu_is_visible and self.game_focus == GameFocusKnapsack:
-            self.human_player.knapsack.draw_focus()
-        self.human_player.knapsack.draw_selection(
-            focused=self.game_focus == GameFocusKnapsack and not self.menu_is_visible)
+        if self.human_player:
+            self.human_player.knapsack.draw()
+            if not self.menu_is_visible and self.game_focus == GameFocusKnapsack:
+                self.human_player.knapsack.draw_focus()
+            self.human_player.knapsack.draw_selection(
+                focused=self.game_focus == GameFocusKnapsack and not self.menu_is_visible)
         self.window_stack.draw()
 
     def on_screen_resize(self):
@@ -189,11 +206,12 @@ class Game:
         if self.window_stack.is_visible():
             self.window_stack.switch_focus(sum(relative))
         else:  # game
-            if self.game_focus == GameFocusHumanPlayer:
-                self.human_player.move(relative)
-                self.cur_room = self.human_player.room
-            elif self.game_focus == GameFocusKnapsack:
-                self.human_player.knapsack.move_selection(relative)
+            if self.human_player:
+                if self.game_focus == GameFocusHumanPlayer:
+                    self.human_player.move(relative)
+                    self.cur_room = self.human_player.room
+                elif self.game_focus == GameFocusKnapsack:
+                    self.human_player.knapsack.move_selection(relative)
 
     def on_mouse_motion(self, x, y):
         if self.window_stack.is_visible():
@@ -250,16 +268,16 @@ class Game:
             self.recheck_finished_game = False
 
 
-class GameMenu(Menu):
+class GameMenuBase(Menu):
     def __init__(self, game, **kwargs):
         """
         :param Game game:
         """
-        super(GameMenu, self).__init__(window_stack=game.window_stack, **kwargs)
+        super(GameMenuBase, self).__init__(window_stack=game.window_stack, **kwargs)
         self.game = game
 
 
-class MainMenu(GameMenu):
+class MainMenu(GameMenuBase):
     def __init__(self, game):
         """
         :param Game game:
@@ -270,12 +288,13 @@ class MainMenu(GameMenu):
             ("Save", SaveGameMenu(game=game).open),
             ("Switch or restart game", SelectGameMenu(game=game).open),
             ("Help / how to play", lambda: HelpMenu(window_stack=game.window_stack).open()),
+            ("Editor", EditorMenu(game=game).open),
             ("Debug", DebugMenu(game=game).open),
             ("Exit", lambda: game.confirm_action("Do you really want to exit?", game.exit))
         ])
 
 
-class LoadGameMenu(GameMenu):
+class LoadGameMenu(GameMenuBase):
     def __init__(self, game):
         """
         :param Game game:
@@ -305,7 +324,7 @@ class LoadGameMenu(GameMenu):
             window_stack=self.window_stack).open()
 
 
-class SelectGameMenu(GameMenu):
+class SelectGameMenu(GameMenuBase):
     def __init__(self, game):
         """
         :param Game game:
@@ -365,7 +384,24 @@ class SaveGameMenu(TextInput):
         MessageBox(title="Game saved as %r." % os.path.splitext(f)[0], window_stack=self.window_stack).open()
 
 
-class DebugMenu(GameMenu):
+class EditorMenu(GameMenuBase):
+    def __init__(self, game):
+        """
+        :param Game game:
+        """
+        super(EditorMenu, self).__init__(game=game, title="Editor", actions=[
+            ("Enable / disable", self.enable_disable),
+            ("Reset world", self.reset_world),
+        ])
+
+    def enable_disable(self):
+        self.game.switch_edit_mode()
+
+    def reset_world(self):
+        self.game.load_empty()
+
+
+class DebugMenu(GameMenuBase):
     def __init__(self, game):
         """
         :param Game game:
@@ -463,12 +499,13 @@ class World:
 
     def find_human_player(self):
         """
-        :rtype: Entity
+        :rtype: Entity|None
         """
         for room in self.rooms:
             for player in room.players:
                 if player.name == PLAYER_PIC:
                     return player
+        return None
 
     def find_king(self):
         for room in self.rooms:
@@ -501,13 +538,21 @@ class World:
                         room_coord=place.coord,
                         name=random.choice(SCORES_PICS)))
 
+    def _reset(self):
+        self._reset_diamonds()
+        for room in self.rooms:
+            room.players.clear()
+            for place in room.places:
+                place.reset_entities()
+
+    def load_empty(self):
+        self._reset()
+
     def load(self, filename):
         """
         :param str filename:
         """
-        # We only need to reset diamond states.
-        # The entities of each room will be reset via set_entity().
-        self._reset_diamonds()
+        self._reset()
         loaded_rooms_idxs = set()  # type: Set[int]
         cur_room_idx = None
         cur_place_idx = 0
