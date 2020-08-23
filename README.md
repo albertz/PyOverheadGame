@@ -1,6 +1,6 @@
 # PyOverheadGame
 
-This is a successor of the game [Robot 2](http://www.az2000.de/projects/robot2/)
+This is a successor of the game [Robot 2](https://github.com/albertz/Robot2)
 and [Robot](http://www.az2000.de/projects/robot/)
 which are itself pretty much very simplistic variants of [The game of ROBOT](http://www.game-of-robot.de/).
 I changed the name in this project to avoid confusion.
