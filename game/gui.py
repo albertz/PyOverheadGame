@@ -120,7 +120,7 @@ class Menu(Window):
         self.selected_action_index = initial_selected_action_index
         self.actions = actions
         self.labels = [
-            arcade.create_text(
+            arcade.CreateText(
                 act[0], color=arcade.color.BLACK, anchor_y="center", font_size=20)
             for act in actions]
         self.label_location_map = {}
