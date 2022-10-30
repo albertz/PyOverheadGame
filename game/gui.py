@@ -241,18 +241,6 @@ class MessageBox(ChoiceMenu):
             **kwargs)
 
 
-class Rectangle(object):
-    """
-    Draws a rectangle into a batch.
-    """
-    def __init__(self, x1, y1, x2, y2, batch):
-        import pyglet
-        self.vertex_list = batch.add(4, pyglet.gl.GL_QUADS, None,
-            ('v2i', [x1, y1, x2, y1, x2, y2, x1, y2]),
-            ('c4B', [200, 200, 220, 255] * 4)
-        )
-
-
 class TextInput(Window):
     """
     See here:
@@ -280,13 +268,6 @@ class TextInput(Window):
             self.document, self.text_width, self.text_height, multiline=False, batch=self.batch)
         self.caret = pyglet.text.caret.Caret(self.layout)
 
-        x = 0
-        y = 0
-        pad = 2
-        self.rectangle = Rectangle(
-            x - pad, y - pad,
-            x + self.text_width + pad, y + self.text_height + pad, self.batch)
-
     def _draw_start_pos(self, x, y):
         from .app import app
         import pyglet
@@ -295,12 +276,20 @@ class TextInput(Window):
 
     def draw(self):
         y = super(TextInput, self).draw()
+        import pyglet
         from .app import app
         width, height = self.get_size()
         x = (app.window.width - width) // 2 + self.border_size
         y += self.text_height
         self._draw_start_pos(x, y)
         self.batch.draw()
+        pad = 2
+        x1, y1, x2, y2 = - pad, - pad, self.text_width + pad, self.text_height + pad
+        pyglet.graphics.draw(
+            4, pyglet.gl.GL_QUADS, None,
+            ('v2i', [x1, y1, x2, y1, x2, y2, x1, y2]),
+            ('c4B', [200, 200, 220, 255] * 4)
+        )
 
     def do_action(self):
         self.close()
