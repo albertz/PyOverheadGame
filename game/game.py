@@ -1096,7 +1096,7 @@ class Entity:
         :param str name: e.g. "figur"
         """
         self.room = room
-        self.room_coord = room_coord
+        self.room_coord = numpy.array(room_coord)
         self.name = name
         self.knapsack = None  # type: Optional[Room]
         self.scores = 0
