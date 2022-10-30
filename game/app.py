@@ -120,6 +120,9 @@ class MainWindow(arcade.Window):
     def on_mouse_press(self, x: float, y: float, button: int, modifiers: int):
         app.game.on_mouse_press(x, self.height - y, button)
 
+    def on_mouse_drag(self, x: float, y: float, dx: float, dy: float, buttons: int, modifiers: int):
+        app.game.on_mouse_press(x, self.height - y, buttons)
+
 
 def main():
     """ Main method """
