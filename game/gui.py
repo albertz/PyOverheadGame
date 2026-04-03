@@ -1,6 +1,5 @@
 
 import arcade
-from arcade import Color
 from typing import List
 
 
@@ -117,12 +116,18 @@ class Menu(Window):
         :param int initial_selected_action_index:
         """
         super(Menu, self).__init__(**kwargs)
+        from .app import app
+        center_x = app.window.width // 2
         self.selected_action_index = initial_selected_action_index
         self.actions = actions
-        self.labels = [
-            arcade.CreateText(
-                act[0], color=arcade.color.BLACK, anchor_y="center", font_size=20)
-            for act in actions]
+        self.labels = []
+        y = 0
+        for act in actions:
+            label = arcade.Text(
+                act[0], start_x=center_x, start_y=y,
+                color=arcade.color.BLACK, anchor_x="center", anchor_y="center", font_size=20)
+            self.labels.append(label)
+            y += label.content_height + 5
         self.label_location_map = {}
         self.label_width = max([label.content_width for label in self.labels]) + 30
         self.label_height = max([label.content_height for label in self.labels]) + 10
@@ -158,10 +163,8 @@ class Menu(Window):
                 color=arcade.color.BLUE if focused else arcade.color.BLACK,
                 center_x=center_x, center_y=app.window.height - y,
                 width=self.label_width, height=self.label_height)
-            arcade.render_text(
-                label,
-                start_x=center_x - label.content_width // 2, start_y=app.window.height - y)
-            y += self.label_height + self.label_step_size
+            label.draw()
+            y += label.content_height + self.label_step_size
 
     def switch_focus(self, relative=1):
         self.selected_action_index += relative
@@ -362,7 +365,7 @@ corresponding spot <img src='{game.CODE_PICS[0]}.png' width={s} height={s}>.
 
 def create_html_text(
         text: str,
-        color: Color,
+        color,
         width: int=None,
         anchor_x="left",
         anchor_y="baseline",

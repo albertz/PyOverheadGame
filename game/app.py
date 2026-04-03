@@ -67,7 +67,7 @@ class MainWindow(arcade.Window):
     #    #app.game.on_screen_resize()
     #    pass
 
-    def update(self, delta_time):
+    def on_update(self, delta_time):
         """
         Movement and game logic. This is called for every frame.
 

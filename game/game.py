@@ -173,14 +173,12 @@ class Game:
         else:
             txt = "No player"
         if not self.game_text_gfx_label or self.game_text_gfx_label.text != txt:
-            self.game_text_gfx_label = arcade.create_text(txt, color=arcade.color.BLACK, anchor_y="center")
-        arcade.render_text(
-            self.game_text_gfx_label,
-            start_x=p1[0] + 5, start_y=app.window.height - center[1])
+            self.game_text_gfx_label = arcade.Text(
+                txt, start_x=p1[0] + 5, start_y=app.window.height - center[1],
+                color=arcade.color.BLACK, anchor_y="center")
+        self.game_text_gfx_label.draw()
         if self.info_text_gfx_label:
-            arcade.render_text(
-                self.info_text_gfx_label,
-                start_x=p1[0] + self.game_text_gfx_label.content_width + 20, start_y=app.window.height - center[1])
+            self.info_text_gfx_label.draw()
 
     def confirm_action(self, title, action):
         """
@@ -193,8 +191,19 @@ class Game:
 
     def set_info_text(self, info_txt):
         self.info_text = info_txt
-        self.info_text_gfx_label = arcade.create_text(
-            info_txt, color=arcade.color.BLUE, anchor_y="center")
+        from .app import app
+        # Place the info text in the same text area as the main game text,
+        # to the right of it if available, otherwise just after the left margin.
+        p1, p2 = self.get_text_placement()
+        center = (p1 + p2) // 2
+        base_x = p1[0] + 5
+        x = base_x
+        if self.game_text_gfx_label is not None:
+            x = base_x + self.game_text_gfx_label.content_width + 20
+        self.info_text_gfx_label = arcade.Text(
+            info_txt,
+            start_x=x, start_y=app.window.height - center[1],
+            color=arcade.color.BLUE, anchor_y="center")
 
     def draw(self):
         self.draw_text()
