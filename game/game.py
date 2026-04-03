@@ -165,7 +165,14 @@ class Game:
         from .app import app
         p1, p2 = self.get_text_placement()
         center = (p1 + p2) // 2
-        arcade.draw_rectangle_filled(color=arcade.color.WHITE, **app.get_screen_pos_args((p1, p2)))
+        args = app.get_screen_pos_args((p1, p2))
+        arcade.draw_lbwh_rectangle_filled(
+            args["center_x"] - args["width"] // 2,
+            args["center_y"] - args["height"] // 2,
+            args["width"],
+            args["height"],
+            color=arcade.color.WHITE,
+        )
         if self.edit_mode:
             txt = "-- Edit mode -- Room %r" % (tuple(self.cur_room.world_coord),)
         elif self.human_player:
@@ -174,10 +181,21 @@ class Game:
             txt = "No player"
         if not self.game_text_gfx_label or self.game_text_gfx_label.text != txt:
             self.game_text_gfx_label = arcade.Text(
-                txt, start_x=p1[0] + 5, start_y=app.window.height - center[1],
-                color=arcade.color.BLACK, anchor_y="center")
+                txt,
+                p1[0] + 5,
+                app.window.height - center[1],
+                color=arcade.color.BLACK,
+                anchor_y="center",
+            )
+        else:
+            # Keep HUD text aligned when window size or layout changes.
+            self.game_text_gfx_label.x = p1[0] + 5
+            self.game_text_gfx_label.y = app.window.height - center[1]
         self.game_text_gfx_label.draw()
         if self.info_text_gfx_label:
+            # Re-anchor info text next to the score text.
+            self.info_text_gfx_label.x = p1[0] + self.game_text_gfx_label.content_width + 25
+            self.info_text_gfx_label.y = app.window.height - center[1]
             self.info_text_gfx_label.draw()
 
     def confirm_action(self, title, action):
@@ -202,8 +220,11 @@ class Game:
             x = base_x + self.game_text_gfx_label.content_width + 20
         self.info_text_gfx_label = arcade.Text(
             info_txt,
-            start_x=x, start_y=app.window.height - center[1],
-            color=arcade.color.BLUE, anchor_y="center")
+            x,
+            app.window.height - center[1],
+            color=arcade.color.BLUE,
+            anchor_y="center",
+        )
 
     def draw(self):
         self.draw_text()
@@ -876,14 +897,26 @@ class Room:
 
     def draw(self):
         from .app import app
-        arcade.draw_rectangle_filled(
-            color=[127, 127, 127], **app.get_screen_pos_args(self.get_screen_placement()))
+        args = app.get_screen_pos_args(self.get_screen_placement())
+        arcade.draw_lbwh_rectangle_filled(
+            args["center_x"] - args["width"] // 2,
+            args["center_y"] - args["height"] // 2,
+            args["width"],
+            args["height"],
+            color=[127, 127, 127],
+        )
         self.entities_sprite_list.draw()
 
     def draw_focus(self):
         from .app import app
-        arcade.draw_rectangle_outline(
-            color=arcade.color.BLUE, **app.get_screen_pos_args(self.get_screen_placement()))
+        args = app.get_screen_pos_args(self.get_screen_placement())
+        arcade.draw_lbwh_rectangle_outline(
+            args["center_x"] - args["width"] // 2,
+            args["center_y"] - args["height"] // 2,
+            args["width"],
+            args["height"],
+            color=arcade.color.BLUE,
+        )
 
     def draw_selection(self, focused=False):
         if not self.selected_place:
@@ -893,10 +926,13 @@ class Room:
         size = numpy.array((app.window.entity_pixel_size, app.window.entity_pixel_size))
         p2 = p1 + size
         center = (p1 + p2) // 2
-        arcade.draw_rectangle_outline(
+        arcade.draw_lbwh_rectangle_outline(
+            center[0] - size[0] // 2,
+            (app.window.height - center[1]) - size[1] // 2,
+            size[0],
+            size[1],
             color=arcade.color.BLUE if focused else arcade.color.BLACK,
-            center_x=center[0], center_y=app.window.height - center[1],
-            width=size[0], height=size[1])
+        )
 
     def move_selection(self, relative):
         """
@@ -1140,7 +1176,8 @@ class Entity:
 
     def reset_sprite(self):
         from .app import app
-        texture = arcade.load_texture(file_name="%s/%s.png" % (GFX_DIR, self.name))
+        # Newer Arcade uses `file_path` (and also supports a positional path).
+        texture = arcade.load_texture(file_path="%s/%s.png" % (GFX_DIR, self.name))
         scale = app.window.entity_pixel_size / texture.width
         self.sprite = arcade.Sprite(scale=scale)
         self.sprite.append_texture(texture)

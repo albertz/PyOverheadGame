@@ -70,8 +70,21 @@ class Window:
         background_size_args = dict(
             center_x=app.window.width // 2, center_y=app.window.height // 2,
             width=width, height=height)
-        arcade.draw_rectangle_filled(color=arcade.color.WHITE, **background_size_args)
-        arcade.draw_rectangle_outline(color=arcade.color.BLUE, **background_size_args)
+        # Arcade 3.x uses explicit rectangle helpers (no draw_rectangle_*).
+        arcade.draw_lbwh_rectangle_filled(
+            background_size_args["center_x"] - background_size_args["width"] // 2,
+            background_size_args["center_y"] - background_size_args["height"] // 2,
+            background_size_args["width"],
+            background_size_args["height"],
+            color=arcade.color.WHITE,
+        )
+        arcade.draw_lbwh_rectangle_outline(
+            background_size_args["center_x"] - background_size_args["width"] // 2,
+            background_size_args["center_y"] - background_size_args["height"] // 2,
+            background_size_args["width"],
+            background_size_args["height"],
+            color=arcade.color.BLUE,
+        )
 
     def draw_title(self):
         from .app import app
@@ -80,10 +93,11 @@ class Window:
         y = (app.window.height - height) // 2
         y += self.border_size
         if self.title_label:
-            arcade.render_text(
-                self.title_label,
-                start_x=center_x - self.title_label.content_width // 2,
-                start_y=app.window.height - y - self.title_label.content_height // 2)
+            # Position and draw the HTMLLabel directly instead of using the
+            # removed arcade.render_text helper from older Arcade versions.
+            self.title_label.x = center_x - self.title_label.content_width // 2
+            self.title_label.y = app.window.height - y - self.title_label.content_height // 2
+            self.title_label.draw()
             y += self.title_label.content_height + self.title_step_size
         return y
 
@@ -123,9 +137,16 @@ class Menu(Window):
         self.labels = []
         y = 0
         for act in actions:
+            # arcade.Text in newer Arcade expects (text, x, y, color, ...)
             label = arcade.Text(
-                act[0], start_x=center_x, start_y=y,
-                color=arcade.color.BLACK, anchor_x="center", anchor_y="center", font_size=20)
+                act[0],
+                center_x,
+                y,
+                color=arcade.color.BLACK,
+                anchor_x="center",
+                anchor_y="center",
+                font_size=20,
+            )
             self.labels.append(label)
             y += label.content_height + 5
         self.label_location_map = {}
@@ -155,14 +176,26 @@ class Menu(Window):
         for i, label in enumerate(self.labels):
             focused = i == self.selected_action_index
             self.label_location_map[(center_x, y)] = i
-            arcade.draw_rectangle_filled(
+            center_y = app.window.height - y
+            lbwh_x = center_x - self.label_width // 2
+            lbwh_y = center_y - self.label_height // 2
+            arcade.draw_lbwh_rectangle_filled(
+                lbwh_x,
+                lbwh_y,
+                self.label_width,
+                self.label_height,
                 color=arcade.color.BABY_BLUE if focused else arcade.color.BLUE_GRAY,
-                center_x=center_x, center_y=app.window.height - y,
-                width=self.label_width, height=self.label_height)
-            arcade.draw_rectangle_outline(
+            )
+            arcade.draw_lbwh_rectangle_outline(
+                lbwh_x,
+                lbwh_y,
+                self.label_width,
+                self.label_height,
                 color=arcade.color.BLUE if focused else arcade.color.BLACK,
-                center_x=center_x, center_y=app.window.height - y,
-                width=self.label_width, height=self.label_height)
+            )
+            # Keep text centered inside each menu item rectangle.
+            label.x = center_x
+            label.y = center_y
             label.draw()
             y += label.content_height + self.label_step_size
 
@@ -253,23 +286,12 @@ class TextInput(Window):
     def __init__(self, callback, **kwargs):
         super(TextInput, self).__init__(**kwargs)
         self.callback = callback
-
-        import pyglet
+        # Simple text buffer for input; avoid using pyglet's text layout APIs
+        # which changed significantly in newer pyglet/Arcade versions.
         from .app import app
-
-        self.batch = pyglet.graphics.Batch()
+        self.text = ""
         self.text_width = app.window.width // 3
-
-        self.document = pyglet.text.document.UnformattedDocument("")
-        self.document.set_style(0, len(self.document.text),
-            dict(color=(0, 0, 0, 255), font_size=20)
-        )
-        font = self.document.get_font()
-        self.text_height = font.ascent - font.descent
-
-        self.layout = pyglet.text.layout.IncrementalTextLayout(
-            self.document, self.text_width, self.text_height, multiline=False, batch=self.batch)
-        self.caret = pyglet.text.caret.Caret(self.layout)
+        self.text_height = 28  # reasonable fixed height for the input line
 
     def _draw_start_pos(self, x, y):
         from .app import app
@@ -279,24 +301,45 @@ class TextInput(Window):
 
     def draw(self):
         y = super(TextInput, self).draw()
-        import pyglet
         from .app import app
         width, height = self.get_size()
         x = (app.window.width - width) // 2 + self.border_size
         y += self.text_height
-        self._draw_start_pos(x, y)
-        self.batch.draw()
+        # Draw the text input background
         pad = 2
-        x1, y1, x2, y2 = - pad, - pad, self.text_width + pad, self.text_height + pad
-        pyglet.graphics.draw(
-            4, pyglet.gl.GL_QUADS, None,
-            ('v2i', [x1, y1, x2, y1, x2, y2, x1, y2]),
-            ('c4B', [200, 200, 220, 255] * 4)
+        center_x = x + self.text_width // 2
+        center_y = app.window.height - (y + self.text_height // 2)
+        lbwh_x = center_x - (self.text_width + pad * 2) // 2
+        lbwh_y = center_y - (self.text_height + pad * 2) // 2
+        arcade.draw_lbwh_rectangle_filled(
+            lbwh_x,
+            lbwh_y,
+            self.text_width + pad * 2,
+            self.text_height + pad * 2,
+            color=arcade.color.LIGHT_GRAY,
         )
+        arcade.draw_lbwh_rectangle_outline(
+            lbwh_x,
+            lbwh_y,
+            self.text_width + pad * 2,
+            self.text_height + pad * 2,
+            color=arcade.color.BLACK,
+        )
+        # Draw the current text
+        text_label = arcade.Text(
+            self.text,
+            x + pad,
+            app.window.height - y - self.text_height + pad,
+            color=arcade.color.BLACK,
+            anchor_x="left",
+            anchor_y="baseline",
+            font_size=20,
+        )
+        text_label.draw()
 
     def do_action(self):
         self.close()
-        self.callback(self.document.text)
+        self.callback(self.text)
 
     def on_key_escape(self):
         self.close()
@@ -317,10 +360,15 @@ class TextInput(Window):
     def on_text(self, text):
         if text in ("\n", "\r"):
             return
-        self.caret.on_text(text)
+        # Basic text editing: support backspace and appending characters.
+        if text in ("\b", "\x7f"):
+            self.text = self.text[:-1]
+        else:
+            self.text += text
 
     def on_text_motion(self, motion):
-        self.caret.on_text_motion(motion)
+        # No-op; we do not keep a real caret here.
+        pass
 
 
 class HelpMenu(MessageBox):

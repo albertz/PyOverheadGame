@@ -53,13 +53,14 @@ class MainWindow(arcade.Window):
             width=width, height=height, title="PyOverheadGame!")
         self.key_downs = {}  # key int idx -> delta time
         self.set_icon(pyglet.image.load("%s/robot.png" % GFX_DIR))
+        arcade.set_background_color(arcade.color.BABY_BLUE)
 
     def on_draw(self):
         """
         Called every frame for drawing.
         """
-        arcade.start_render()
-        arcade.set_background_color(arcade.color.BABY_BLUE)
+        # Arcade 3.x: use Window.clear() instead of start_render().
+        self.clear()
         app.game.draw()
 
     # Does not work?
